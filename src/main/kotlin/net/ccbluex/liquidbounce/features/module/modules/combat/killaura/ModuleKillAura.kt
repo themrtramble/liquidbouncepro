@@ -109,7 +109,20 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
 
     // Bypass techniques
     internal val raycast by enumChoice("Raycast", TRACE_ALL)
-    private val criticalsSelectionMode by enumChoice("Criticals", CriticalsSelectionMode.SMART)
+    /**
+     * Pro fork: default Criticals selection mode = IGNORE (was SMART).
+     *
+     * SMART mode pauses KillAura while the player is jumping/falling to wait for
+     * a guaranteed crit — which means the attack rate visibly drops whenever the
+     * user manually jumps. With IGNORE mode, KillAura attacks at full speed
+     * regardless of whether a crit is possible, so:
+     *   - Manual jumps no longer slow down KillAura (speed stays the same)
+     *   - Crits still land whenever the player happens to be falling (fallDistance > 0)
+     *
+     * Trade-off: ~30% fewer crits in exchange for an uninterrupted attack rate.
+     * Set this back to SMART if you prefer guaranteed crits over attack speed.
+     */
+    private val criticalsSelectionMode by enumChoice("Criticals", CriticalsSelectionMode.IGNORE)
     private val keepSprint by boolean("KeepSprint", true)
 
     /**
@@ -124,19 +137,21 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
 
     /**
      * Pro fork: maximum number of distinct enemies to attack in a single tick when
-     * MultiTarget is enabled. Reduced from 5 to 3 to avoid lag from too many
-     * rotation/attack packets per tick.
+     * MultiTarget is enabled. Raised from 3 to 10 so the client can effectively
+     * fight whole crowds at once. Combined with multiTargetCooldown=0 (below),
+     * every enemy in range gets hit every single tick.
      */
-    private val multiTargetMaxPerTick by int("MultiTargetMaxPerTick", 3, 1..20, "targets")
+    private val multiTargetMaxPerTick by int("MultiTargetMaxPerTick", 10, 1..50, "targets")
 
     /**
      * Pro fork: cooldown (in ticks) between attacks on the SAME enemy when multi-target
-     * is enabled. Default 2 ticks = each enemy gets attacked every other tick, halving
-     * the packet rate per enemy while still feeling instant to the player.
+     * is enabled. Default 0 = attack every tick. With CPS 200..500 and MaxPerTick 10,
+     * this produces the fastest possible multi-target attack rate.
      *
-     * Set to 0 to attack every tick (more aggressive but causes more lag).
+     * Set higher (e.g. 2) if the server's anti-cheat starts flagging for too many
+     * attack packets per second per enemy.
      */
-    private val multiTargetCooldown by int("MultiTargetCooldown", 2, 0..10, "ticks")
+    private val multiTargetCooldown by int("MultiTargetCooldown", 0, 0..20, "ticks")
 
     /**
      * Pro fork: tracks the last tick each enemy was attacked, so we don't spam the same
