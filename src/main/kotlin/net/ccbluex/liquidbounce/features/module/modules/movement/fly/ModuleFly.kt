@@ -135,7 +135,7 @@ object ModuleFly : ClientModule("Fly", ModuleCategories.MOVEMENT, aliases = list
         // player does not stay stuck in creative-flight state after disabling.
         player.abilities.mayfly = wasFlyingAllowed
         player.abilities.flying = false
-        player.fallDistance = 0.0f
+        player.fallDistance = 0.0
     }
 
     @Suppress("unused")

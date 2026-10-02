@@ -84,7 +84,7 @@ internal object FlyVanilla : Mode("Vanilla") {
         player.abilities.flying = true
         // Reset fall distance every tick so disabling fly mid-air does not kill the
         // player with accumulated fall damage.
-        player.fallDistance = 0.0f
+        player.fallDistance = 0.0
 
         player.deltaMovement = player.deltaMovement.withStrafe(speed = hSpeed.toDouble())
         player.deltaMovement.y = when {
@@ -149,7 +149,7 @@ internal object FlyCreative : Mode("Creative") {
         if (forceFlight) player.abilities.flying = true
         // Pro fork: reset fall distance so disabling FlyCreative mid-air does not
         // kill the player with accumulated fall damage.
-        player.fallDistance = 0.0f
+        player.fallDistance = 0.0
 
         if (player.deltaMovement.lengthSqr() > maxVelocity.sq()) {
             player.deltaMovement = player.deltaMovement.withLength(maxVelocity.toDouble())
