@@ -143,7 +143,9 @@ object ModuleXRay : ClientModule("XRay", ModuleCategories.RENDER) {
     private val exposedOnly by boolean("ExposedOnly", false)
         .onChanged(valueChangedReload)
 
-    val backgroundOpacity by int("BackgroundOpacity", 0, 0..255)
+    // Pro fork: opacity 80 so world is semi-visible (prevents floating blocks glitch)
+    // and ores are clearly visible on top of the dimmed background
+    val backgroundOpacity by int("BackgroundOpacity", 80, 0..255)
         .onChanged(valueChangedReload)
 
     private val defaultBlocks = arrayOf<Block>(
