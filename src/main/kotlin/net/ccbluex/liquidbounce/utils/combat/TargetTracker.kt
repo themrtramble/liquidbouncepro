@@ -27,6 +27,7 @@ import net.ccbluex.liquidbounce.config.types.ValueType.INT
 import net.ccbluex.liquidbounce.config.types.ValueType.INT_RANGE
 import net.ccbluex.liquidbounce.config.types.group.ValueGroup
 import net.ccbluex.liquidbounce.config.types.list.Tagged
+import net.ccbluex.liquidbounce.features.misc.FriendManager
 import net.ccbluex.liquidbounce.utils.aiming.utils.RotationUtil
 import net.ccbluex.liquidbounce.utils.client.DummyRangedValueProvider
 import net.ccbluex.liquidbounce.utils.client.NoneRangedValueProvider
@@ -156,6 +157,8 @@ open class TargetSelector(
             && entity.hurtTime <= hurtTime
             && validateRange(entity)
             && entity.shouldBeAttacked()
+            // Pro fork: NEVER attack friends — explicit safety check
+            && !FriendManager.isFriend(entity)
             && fov >= RotationUtil.crosshairAngleToEntity(entity)
 
     private fun validateRange(entity: LivingEntity): Boolean {
