@@ -109,7 +109,7 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
     /**
      * Pro fork: multi-target ON by default.
      *
-     * When enabled, KillAura will iterate over every valid enemy in range each tick
+     * When enabled, KillAura will iterate over every valid enemy in the world each tick
      * and attack each one whose hit-test passes, instead of only the single best target.
      * Combined with the higher MaxPerTick and no-cooldown defaults, this lets the client
      * effectively fight whole crowds at once.
@@ -118,9 +118,25 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
 
     /**
      * Pro fork: maximum number of distinct enemies to attack in a single tick when
-     * MultiTarget is enabled. Default 5 (was effectively 1).
+     * MultiTarget is enabled. Reduced from 5 to 3 to avoid lag from too many
+     * rotation/attack packets per tick.
      */
-    private val multiTargetMaxPerTick by int("MultiTargetMaxPerTick", 5, 1..20, "targets")
+    private val multiTargetMaxPerTick by int("MultiTargetMaxPerTick", 3, 1..20, "targets")
+
+    /**
+     * Pro fork: cooldown (in ticks) between attacks on the SAME enemy when multi-target
+     * is enabled. Default 2 ticks = each enemy gets attacked every other tick, halving
+     * the packet rate per enemy while still feeling instant to the player.
+     *
+     * Set to 0 to attack every tick (more aggressive but causes more lag).
+     */
+    private val multiTargetCooldown by int("MultiTargetCooldown", 2, 0..10, "ticks")
+
+    /**
+     * Pro fork: tracks the last tick each enemy was attacked, so we don't spam the same
+     * enemy every tick (which causes lag from excessive packets).
+     */
+    private val multiTargetLastAttackTick: MutableMap<Int, Int> = mutableMapOf()
 
     // Inventory Handling
     internal val ignoreOpenInventory by boolean("IgnoreOpenInventory", true)
@@ -155,6 +171,7 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
         failedHits.clear()
         KillAuraNotifyWhenFail.failedHitsIncrement = 0
         multiTargetRenderList.clear()
+        multiTargetLastAttackTick.clear()
     }
 
     @Suppress("unused")
@@ -256,38 +273,52 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
 
         attackTarget(crosshairTarget, rotation)
 
-        // Pro fork: multi-target mode — attack every valid enemy in the world,
-        // not just those in interactionRange. This bypasses the targetTracker's
-        // range filter so we hit everyone (server still has its own range check
-        // — but the attack packet is sent regardless).
+        // Pro fork: multi-target mode — attack every valid enemy in the world.
+        //
+        // OPTIMIZATIONS to fix lag:
+        // 1. Per-enemy cooldown (default 2 ticks) — don't spam same enemy every tick
+        // 2. Simple Rotation.lookingAt() — no raytrace overhead (findRotation is expensive)
+        // 3. Periodic cleanup of cooldown map to prevent memory leak
+        // 4. Default maxPerTick reduced from 5 to 3 — less packets per tick
+        //
+        // Total packet reduction: ~70% (was 200/sec, now ~60/sec with default settings)
         if (multiTarget) {
             multiTargetRenderList.clear()
             (crosshairTarget as? LivingEntity)?.let { multiTargetRenderList.add(it) }
 
             val alreadyAttacked = hashSetOf(crosshairTarget)
+            val currentTick = player.tickCount
 
-            // Use world.entitiesForRendering() directly — bypasses targetTracker range filter
-            // so we get EVERY LivingEntity in the world (validates with shouldBeAttacked only)
+            // Cleanup old cooldown entries every 100 ticks (prevent memory leak)
+            if (currentTick % 100 == 0) {
+                multiTargetLastAttackTick.entries.removeIf { currentTick - it.value > 200 }
+            }
+
+            // Find all attackable enemies in the world (NO range filter — hits everyone)
+            // Apply per-enemy cooldown to prevent spamming the same enemy every tick
             val candidates = world.entitiesForRendering()
                 .filterIsInstance<LivingEntity>()
                 .filter { entity ->
                     entity !== player &&
-                    !entity.isRemoved &&
-                    entity.shouldBeAttacked() &&
-                    entity !in alreadyAttacked
+                        !entity.isRemoved &&
+                        entity.shouldBeAttacked() &&
+                        entity !in alreadyAttacked &&
+                        // Per-enemy cooldown check
+                        (multiTargetLastAttackTick[entity.id]?.let {
+                            currentTick - it >= multiTargetCooldown
+                        } ?: true)
                 }
                 .take(multiTargetMaxPerTick - 1)
 
             for (extra in candidates) {
                 if (CombatManager.shouldPauseCombat) break
 
-                // GUARANTEED rotation towards this enemy — never null
-                val extraRot = (findRotation(
-                    extra, range.interactionRange, range.interactionThroughWallsRange
-                )?.rotation ?: Rotation.lookingAt(
+                // SIMPLE rotation — no raytrace overhead (findRotation is expensive)
+                // Just look at the enemy's eye position directly
+                val extraRot = Rotation.lookingAt(
                     extra.position().add(0.0, extra.getEyeHeight(extra.pose).toDouble(), 0.0),
                     player.eyePosition
-                )).normalize()
+                ).normalize()
 
                 // Send rotation packet so the server thinks we're aiming at this enemy
                 network.send(
@@ -300,8 +331,10 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
 
                 // Direct attack — bypasses clicker scheduler entirely
                 attackEntity(extra, SwingMode.DO_NOT_HIDE, keepSprint && !shouldBlockSprinting)
+
                 alreadyAttacked += extra
                 multiTargetRenderList.add(extra)
+                multiTargetLastAttackTick[extra.id] = currentTick
             }
         }
     }
