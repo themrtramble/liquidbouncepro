@@ -22,6 +22,7 @@ import com.mojang.blaze3d.vertex.QuadInstance;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleXRay;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.util.ARGB;
+import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
@@ -71,20 +72,21 @@ public final class XRayBlockRenderContext {
     public static void applyAlpha(QuadInstance quadInstance) {
         if (!isRenderingTransparentBackground()) {
             // Pro fork: when not transparent background (i.e. rendering an ORE),
-            // boost the brightness so ores appear bright even in dark caves
+            // force the per-vertex light coords to FULL_BRIGHT so the lightmap
+            // lookup returns full white. Without this, ores inside dark caves
+            // (block light = 0, sky light = 0) appear black even with FullBright's
+            // gamma boost, because gamma only brightens the existing lightmap
+            // values - it does not invent light where there is none.
+            //
+            // This mirrors what the Sodium path does in
+            // MixinSodiumAbstractBlockRenderContext#injectXRayFullBright via
+            // quad.setLight(i, FULL_BRIGHT_LIGHTMAP). Vanilla ModelBlockRenderer
+            // builds its QuadInstance before calling BlockQuadOutput#put, so we
+            // override the light here right before the quad is emitted.
             if (ModuleXRay.INSTANCE.getFullBright()) {
+                int fullBright = LightCoordsUtil.FULL_BRIGHT;
                 for (int i = 0; i < 4; i++) {
-                    int color = quadInstance.getColor(i);
-                    // Extract RGB, boost to near-max, preserve alpha
-                    int a = (color >> 24) & 0xFF;
-                    int r = (color >> 16) & 0xFF;
-                    int g = (color >> 8) & 0xFF;
-                    int b = color & 0xFF;
-                    // Boost brightness: blend 50% towards white
-                    r = (int) (r + (255 - r) * 0.5f);
-                    g = (int) (g + (255 - g) * 0.5f);
-                    b = (int) (b + (255 - b) * 0.5f);
-                    quadInstance.setColor(i, (a << 24) | (r << 16) | (g << 8) | b);
+                    quadInstance.setLight(i, fullBright);
                 }
             }
             return;
