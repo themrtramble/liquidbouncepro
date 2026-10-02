@@ -51,7 +51,7 @@ open class RangeValueGroup(
     /**
      * Increases the attack max-range.
      *
-     * Pro fork: maximum buffed to 10 blocks (vanilla cap was 5).
+     * Pro fork: maximum buffed to 12 blocks (vanilla cap was 5).
      * Default value raised so the buff is felt out-of-the-box.
      *
      * When min-range is introduced, rename from "RangeIncrease" to "MaxRangeIncrease"
@@ -60,7 +60,7 @@ open class RangeValueGroup(
     protected var maxRangeIncrease by float(
         "RangeIncrease",
         maxRangeIncrease,
-        0.0f..10f,
+        0.0f..12f,
         "blocks"
     )
 

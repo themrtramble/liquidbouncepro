@@ -22,13 +22,7 @@ import com.mojang.blaze3d.vertex.QuadInstance;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleXRay;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
 import net.minecraft.util.ARGB;
-import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.level.block.state.BlockState;
-
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
-import java.lang.reflect.Method;
 
 /**
  * Scoped context for XRay background block rendering.
@@ -42,48 +36,6 @@ import java.lang.reflect.Method;
 public final class XRayBlockRenderContext {
 
     private static final ScopedValue<Integer> BACKGROUND_ALPHA = ScopedValue.newInstance();
-
-    /**
-     * Vanilla {@link QuadInstance} light setter - the method name differs across MC versions
-     * (setLight on some, setLightCoords on others, setLightmap on yet others). We resolve it
-     * once via reflection and cache the {@link MethodHandle} so the per-quad overhead stays
-     * at a single {@code invokeExact} call. Resolution is best-effort: if no (int, int) setter
-     * matching a known name is found, the FullBright light override is silently disabled and
-     * ores fall back to whatever light Vanilla computes.
-     */
-    private static final MethodHandle QUAD_SET_LIGHT;
-
-    static {
-        MethodHandle handle = null;
-        try {
-            MethodHandles.Lookup lookup = MethodHandles.lookup();
-            MethodType type = MethodType.methodType(void.class, int.class, int.class);
-            String[] candidates = {"setLight", "setLightCoords", "setLightmap", "setLightCoord", "lightCoords", "light"};
-            for (String name : candidates) {
-                try {
-                    handle = lookup.findVirtual(QuadInstance.class, name, type);
-                    break;
-                } catch (NoSuchMethodException ignored) {
-                    // try next candidate
-                }
-            }
-            if (handle == null) {
-                // Fall back to a public-method reflection scan in case the setter is named
-                // differently than any of our guesses (e.g. vendor-specific rename).
-                for (Method m : QuadInstance.class.getMethods()) {
-                    Class<?>[] p = m.getParameterTypes();
-                    if (p.length == 2 && p[0] == int.class && p[1] == int.class
-                            && (m.getName().toLowerCase().contains("light"))) {
-                        handle = lookup.unreflect(m);
-                        break;
-                    }
-                }
-            }
-        } catch (Throwable ignored) {
-            // QuadInstance is unavailable / incompatible - FullBright light override disabled.
-        }
-        QUAD_SET_LIGHT = handle;
-    }
 
     private XRayBlockRenderContext() {
     }
@@ -119,34 +71,19 @@ public final class XRayBlockRenderContext {
 
     public static void applyAlpha(QuadInstance quadInstance) {
         if (!isRenderingTransparentBackground()) {
-            // Pro fork: when not transparent background (i.e. rendering an ORE),
-            // force the per-vertex light coords to FULL_BRIGHT so the lightmap
-            // lookup returns full white. Without this, ores inside dark caves
-            // (block light = 0, sky light = 0) appear black even with FullBright's
-            // gamma boost, because gamma only brightens the existing lightmap
-            // values - it does not invent light where there is none.
+            // Pro fork: FullBright for XRay-rendered ores is now handled globally in
+            // MixinLightmap (the lightmap texture is cleared to white when XRay+FullBright
+            // is active). This works for both vanilla AND Sodium paths because the shader
+            // samples the lightmap texture for every fragment - clearing it to white means
+            // every block (regardless of its per-vertex light coords) renders at full bright.
             //
-            // This mirrors what the Sodium path does in
-            // MixinSodiumAbstractBlockRenderContext#injectXRayFullBright via
-            // quad.setLight(i, FULL_BRIGHT_LIGHTMAP). Vanilla ModelBlockRenderer
-            // builds its QuadInstance before calling BlockQuadOutput#put, so we
-            // override the light here right before the quad is emitted.
+            // The previous per-quad setLight attempts failed because:
+            //   1) QuadInstance.setLight(int,int) does not exist in MC 26.3 (name differs)
+            //   2) Reflection silently failed to find a matching setter
+            //   3) Even if it worked, Sodium already overrides light via a separate path,
+            //      making the per-quad vanilla path redundant with the global lightmap approach
             //
-            // The setter is resolved reflectively because its name differs across
-            // MC 26.x patch versions and the public Blaze3D API surface has been
-            // moving; reflection lets us stay source-compatible without recompiling
-            // against each new mappings drop.
-            if (ModuleXRay.INSTANCE.getFullBright() && QUAD_SET_LIGHT != null) {
-                int fullBright = LightCoordsUtil.FULL_BRIGHT;
-                try {
-                    for (int i = 0; i < 4; i++) {
-                        QUAD_SET_LIGHT.invoke(quadInstance, i, fullBright);
-                    }
-                } catch (Throwable ignored) {
-                    // Light setter call failed for this quad - skip silently. The
-                    // ore will fall back to the default light value for this frame.
-                }
-            }
+            // Doing it at the lightmap level is simpler, more robust, and version-tolerant.
             return;
         }
 

@@ -50,7 +50,7 @@ open class Clicker<T>(
     val parent: T,
     val keyBinding: KeyMapping,
     val itemCooldown: ItemCooldown? = ItemCooldown(),
-    maxCps: Int = 100,
+    maxCps: Int = 200,
     name: String = "Clicker",
     simulateAttackKeyDown: Boolean = false,
 ) : ValueGroup(name, aliases = listOf("ClickScheduler")), EventListener where T : EventListener {
@@ -61,10 +61,11 @@ open class Clicker<T>(
 
     private val technique by enumChoice("Technique", ClickTechnique.HUMAN)
     /**
-     * Pro fork: default CPS buffed to 30..50 (was 20..30 in earlier Pro build,
-     * originally 11..14 in vanilla) for noticeably faster attacks.
+     * Pro fork: default CPS buffed to 60..100 (was 30..50, originally 11..14 in
+     * vanilla) for noticeably faster attacks. Range cap raised to 200 cps so
+     * users can push further if their anti-cheat tolerates it.
      */
-    private val cps by intRange("CPS", 30..50, 1..maxCps, "clicks")
+    private val cps by intRange("CPS", 60..100, 1..maxCps, "clicks")
     /**
      * Pro fork: default max-per-tick raised to 5 (the absolute maximum).
      * Combined with no cooldown this enables up to 5 attacks per tick.

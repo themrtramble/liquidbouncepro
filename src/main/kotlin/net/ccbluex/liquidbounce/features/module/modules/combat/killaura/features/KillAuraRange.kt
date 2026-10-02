@@ -31,9 +31,10 @@ import kotlin.math.max
 /**
  * Allows adjusting your attack range and scan range.
  *
- * Pro fork: defaults buffed — full +10 max range, 10 through walls, larger scan range.
+ * Pro fork: defaults buffed — full +12 max range (was +10), 12 through walls, larger scan range.
+ * Range limit raised to 12 blocks per user request.
  */
-object KillAuraRange : RangeValueGroup("Range", 10f, 10f), MinecraftShortcuts {
+object KillAuraRange : RangeValueGroup("Range", 12f, 12f), MinecraftShortcuts {
 
     internal val scanRange
         get() = maxOf(interactionRange, interactionThroughWallsRange) + currentScanRangeAddition
