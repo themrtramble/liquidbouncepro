@@ -26,6 +26,7 @@ import net.ccbluex.liquidbounce.event.events.WorldRenderEvent
 import net.ccbluex.liquidbounce.event.events.OverlayRenderEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.event.tickHandler
+import net.ccbluex.liquidbounce.features.misc.FriendManager
 import net.ccbluex.liquidbounce.features.module.ClientModule
 import net.ccbluex.liquidbounce.features.module.ModuleCategories
 import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleAutoWeapon
@@ -376,6 +377,7 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
 
             // Find all attackable enemies in the world (NO range filter — hits everyone)
             // Apply per-enemy cooldown to prevent spamming the same enemy every tick
+            // SAFETY: NEVER attack friends — explicit FriendManager check
             val candidates = world.entitiesForRendering()
                 .filterIsInstance<LivingEntity>()
                 .filter { entity ->
@@ -383,6 +385,8 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
                         !entity.isRemoved &&
                         entity.shouldBeAttacked() &&
                         entity !in alreadyAttacked &&
+                        // Pro fork: NEVER attack friends, regardless of GlobalSettings
+                        !FriendManager.isFriend(entity) &&
                         // Per-enemy cooldown check
                         (multiTargetLastAttackTick[entity.id]?.let {
                             currentTick - it >= multiTargetCooldown
