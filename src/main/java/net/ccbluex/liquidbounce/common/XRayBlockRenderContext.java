@@ -70,6 +70,23 @@ public final class XRayBlockRenderContext {
     }
     public static void applyAlpha(QuadInstance quadInstance) {
         if (!isRenderingTransparentBackground()) {
+            // Pro fork: when not transparent background (i.e. rendering an ORE),
+            // boost the brightness so ores appear bright even in dark caves
+            if (ModuleXRay.INSTANCE.getFullBright()) {
+                for (int i = 0; i < 4; i++) {
+                    int color = quadInstance.getColor(i);
+                    // Extract RGB, boost to near-max, preserve alpha
+                    int a = (color >> 24) & 0xFF;
+                    int r = (color >> 16) & 0xFF;
+                    int g = (color >> 8) & 0xFF;
+                    int b = color & 0xFF;
+                    // Boost brightness: blend 50% towards white
+                    r = (int) (r + (255 - r) * 0.5f);
+                    g = (int) (g + (255 - g) * 0.5f);
+                    b = (int) (b + (255 - b) * 0.5f);
+                    quadInstance.setColor(i, (a << 24) | (r << 16) | (g << 8) | b);
+                }
+            }
             return;
         }
 
