@@ -69,6 +69,8 @@ import net.ccbluex.liquidbounce.utils.math.sq
 import net.ccbluex.liquidbounce.utils.raytracing.findEntityInCrosshair
 import net.ccbluex.liquidbounce.utils.raytracing.isLookingAtEntity
 import net.ccbluex.liquidbounce.utils.render.TargetRenderer
+import net.ccbluex.liquidbounce.utils.client.network
+import net.ccbluex.liquidbounce.utils.client.player
 import net.minecraft.client.gui.screens.inventory.ContainerScreen
 import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.LivingEntity
@@ -235,6 +237,11 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
 
         // Pro fork: multi-target mode — swing through every other valid enemy in range
         // within the same tick. Skips the one we already attacked above.
+        //
+        // IMPORTANT: We do NOT use the clicker scheduler here, because the clicker only
+        // allows a fixed number of clicks per tick and the primary attack above already
+        // consumed them. Instead we call attackEntity() directly for each extra enemy.
+        // This is aggressive by design — servers WILL flag this, so the option is OFF-able.
         if (multiTarget) {
             val alreadyAttacked = hashSetOf(crosshairTarget)
             val candidates = targetTracker.targets()
@@ -243,25 +250,31 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
 
             for (extra in candidates) {
                 if (CombatManager.shouldPauseCombat) break
-                if (!clicker.canExecuteClickNow() && !clicker.willClickAt(0)) break
 
+                // Skip if not a validatable target
+                if (extra !is LivingEntity || !extra.shouldBeAttacked()) continue
+
+                // Compute a rotation that aims at this enemy
                 val extraRot = (findRotation(extra, range.interactionRange, range.interactionThroughWallsRange)?.rotation
-                    ?: RotationManager.currentRotation ?: player.rotation).normalize()
+                    ?: RotationManager.currentRotation
+                    ?: player.rotation).normalize()
 
-                val extraCrosshair = if (raycast != TRACE_NONE) {
-                    findEntityInCrosshair(range.interactionRange.toDouble(), extraRot, predicate = {
-                        when (raycast) {
-                            TRACE_ONLYENEMY -> it.shouldBeAttacked()
-                            TRACE_ALL -> true
-                            else -> false
-                        }
-                    })?.entity ?: extra
-                } else extra
+                // Verify the enemy is in attack range (use squared distance as fast check)
+                val squaredDistance = extra.squaredBoxedDistanceTo(player)
+                if (squaredDistance > range.interactionRange.sq()) continue
 
-                if (extraCrosshair is LivingEntity && extraCrosshair.shouldBeAttacked()) {
-                    attackTarget(extraCrosshair, extraRot)
-                    alreadyAttacked += extraCrosshair
-                }
+                // Send a rotation packet so the server thinks we're aiming at this enemy
+                network.send(
+                    net.minecraft.network.protocol.game.ServerboundMovePlayerPacket.PosRot(
+                        player.x, player.y, player.z,
+                        extraRot.yaw, extraRot.pitch,
+                        player.onGround(), player.horizontalCollision
+                    )
+                )
+
+                // Direct attack — bypasses clicker scheduler entirely
+                attackEntity(extra, SwingMode.DO_NOT_HIDE, keepSprint && !shouldBlockSprinting)
+                alreadyAttacked += extra
             }
         }
     }
