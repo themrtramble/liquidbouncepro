@@ -10,10 +10,12 @@ minecraft = "26.2"
 fabric-loom = "1.17-SNAPSHOT"
 fabric-loader = "0.19.5"
 fabric-loaderMin = "0.18.4"
-fabric-api = "0.160.5+26.2"
+fabric-api = "0.161.0+26.2"
 
 # https://github.com/CCBlueX/LiquidBounce-Addon-CEF
-liquidbounce-cef = "1.0.0+26.2-SNAPSHOT"
+# Only the 26.3-SNAPSHOT is published on ccbluex maven; it's runtime-version-agnostic
+# (it's just a JCEF wrapper) so it works fine when the game runs as 26.2.
+liquidbounce-cef = "1.0.0+26.3-SNAPSHOT"
 
 # MinecraftAuth (CCBlueX fork of RaphiMC/MinecraftAuth)
 minecraftauth = "5.0.3-SNAPSHOT"
