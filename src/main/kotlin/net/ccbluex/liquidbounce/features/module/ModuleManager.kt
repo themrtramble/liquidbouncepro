@@ -233,6 +233,7 @@ import net.ccbluex.liquidbounce.features.module.modules.render.ModuleTrueSight
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleVoidESP
 import net.ccbluex.liquidbounce.features.module.modules.render.wings.ModuleWings
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleXRay
+import net.ccbluex.liquidbounce.features.module.modules.render.ModuleOreESP
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleZoom
 import net.ccbluex.liquidbounce.features.module.modules.render.cameraclip.ModuleCameraClip
 import net.ccbluex.liquidbounce.features.module.modules.render.crosshair.ModuleCrosshair
@@ -671,6 +672,7 @@ object ModuleManager : EventListener, Collection<ClientModule> by modules {
             ModuleTrueSight,
             ModuleVoidESP,
             ModuleXRay,
+            ModuleOreESP,
             ModuleDebug,
             ModuleZoom,
             ModuleItemChams,

@@ -139,11 +139,12 @@ object ModuleXRay : ClientModule("XRay", ModuleCategories.RENDER) {
     val fullBright by boolean("FullBright", true)
         .onChanged(valueChangedReload)
 
-    // Only render blocks with non-solid blocks around
-    private val exposedOnly by boolean("ExposedOnly", false)
+    // Only render blocks with non-solid blocks around — Pro fork: default true for better performance
+    private val exposedOnly by boolean("ExposedOnly", true)
         .onChanged(valueChangedReload)
 
-    val backgroundOpacity by int("BackgroundOpacity", 0, 0..255)
+    // Pro fork: higher default opacity so the world is more visible while ores pop out
+    val backgroundOpacity by int("BackgroundOpacity", 30, 0..255)
         .onChanged(valueChangedReload)
 
     private val defaultBlocks = arrayOf<Block>(
