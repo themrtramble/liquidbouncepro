@@ -23,6 +23,7 @@ import net.ccbluex.liquidbounce.config.types.list.Tagged
 import net.ccbluex.liquidbounce.event.events.RotationUpdateEvent
 import net.ccbluex.liquidbounce.event.events.SprintEvent
 import net.ccbluex.liquidbounce.event.events.WorldRenderEvent
+import net.ccbluex.liquidbounce.event.events.OverlayRenderEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.event.tickHandler
 import net.ccbluex.liquidbounce.features.module.ClientModule
@@ -49,9 +50,13 @@ import net.ccbluex.liquidbounce.features.module.modules.render.ModuleDebug
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleDebug.debugGeometry
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleDebug.debugParameter
 import net.ccbluex.liquidbounce.render.engine.type.Color4b
-import net.ccbluex.liquidbounce.render.drawCircleOutline
+import net.ccbluex.liquidbounce.render.drawRoundedRect
+import net.ccbluex.liquidbounce.render.FontManager
 import net.ccbluex.liquidbounce.render.renderEnvironment
 import net.ccbluex.liquidbounce.render.withPositionRelativeToCamera
+import net.ccbluex.liquidbounce.utils.render.WorldToScreen
+import net.ccbluex.liquidbounce.utils.entity.interpolateCurrentPosition
+import net.ccbluex.liquidbounce.utils.entity.getActualHealth
 import net.ccbluex.liquidbounce.utils.aiming.RotationManager
 import net.ccbluex.liquidbounce.utils.aiming.data.Rotation
 import net.ccbluex.liquidbounce.utils.aiming.data.RotationWithVector
@@ -179,15 +184,90 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
         event.renderEnvironment {
             renderFailedHits()
             KillAuraRangeIndicator.render(this, event.partialTicks)
+            // Pro fork: card rendering moved to OverlayRenderEvent (2D HUD overlay)
+        }
+    }
 
-            // Pro fork: draw a blue circle on EVERY attacked enemy when MultiTarget is on
-            if (multiTarget && multiTargetRenderList.isNotEmpty()) {
-                multiTargetRenderList.forEach { entity ->
-                    val pos = entity.position().add(0.0, entity.getEyeHeight(entity.pose).toDouble() * 0.5, 0.0)
-                    withPositionRelativeToCamera(pos.x, pos.y, pos.z) {
-                        drawCircleOutline(0.6f, Color4b(0x33, 0x99, 0xFF, 0xFF), noDepthTest = true)
-                    }
+    /**
+     * Pro fork: real-time HUD card on every attacked enemy.
+     *
+     * Draws a card above each enemy in multiTargetRenderList showing:
+     * - Enemy name
+     * - Health (hearts ❤ and numeric)
+     * - Armor value
+     * - Distance from player
+     *
+     * This is a 2D overlay rendered on top of the world, projected from the enemy's
+     * 3D position to screen coordinates.
+     */
+    @Suppress("unused")
+    private val cardRenderHandler = handler<OverlayRenderEvent> { event ->
+        if (!multiTarget || multiTargetRenderList.isEmpty()) return@handler
+
+        val fontRenderer = FontManager.FONT_RENDERER
+        val tickDelta = event.tickDelta
+
+        event.context.run {
+            multiTargetRenderList.forEach { entity ->
+                // Project entity head position to screen coordinates
+                val worldPos = entity.interpolateCurrentPosition(tickDelta)
+                    .add(0.0, entity.getEyeHeight(entity.pose) + 0.8, 0.0)
+                val screenPos = WorldToScreen.calculateScreenPos(worldPos) ?: return@forEach
+
+                val x = screenPos.x
+                val y = screenPos.y
+
+                // Build card text
+                val name = entity.displayName?.string ?: entity.scoreboardName
+                val health = entity.getActualHealth()
+                val armor = entity.armorValue
+                val distance = player.position().distanceTo(entity.position())
+
+                // Health color: green (full) -> yellow -> red (low)
+                val maxHealth = entity.maxHealth.coerceAtLeast(1f)
+                val healthPct = (health / maxHealth).coerceIn(0f, 1f)
+                val healthColor = when {
+                    healthPct > 0.5f -> Color4b(0x4C, 0xE0, 0x4C, 0xFF) // green
+                    healthPct > 0.25f -> Color4b(0xE0, 0xC0, 0x4C, 0xFF) // yellow
+                    else -> Color4b(0xE0, 0x4C, 0x4C, 0xFF) // red
                 }
+
+                // Build each line of text as a Component (fontRenderer.draw takes Component)
+                val line1 = net.minecraft.network.chat.Component.literal(name)
+                val line2 = net.minecraft.network.chat.Component.literal("HP ${"%.1f".format(health)}  AR ${armor}")
+                val line3 = net.minecraft.network.chat.Component.literal("${"%.1f".format(distance)}m  [ATK]")
+
+                val line1Width = fontRenderer.getStringWidth(line1, shadow = true)
+                val line2Width = fontRenderer.getStringWidth(line2, shadow = true)
+                val line3Width = fontRenderer.getStringWidth(line3, shadow = true)
+                val maxTextWidth = maxOf(line1Width, line2Width, line3Width)
+
+                val cardWidth = maxTextWidth + 16f
+                val cardHeight = fontRenderer.height * 3f + 12f
+                val cardX = x - cardWidth / 2f
+                val cardY = y - cardHeight - 4f
+
+                // Draw card background (dark with blue outline)
+                drawRoundedRect(
+                    x1 = cardX, y1 = cardY,
+                    x2 = cardX + cardWidth, y2 = cardY + cardHeight,
+                    radius = 4f,
+                    fillColor = Color4b(0x10, 0x10, 0x20, 0xCC),
+                    outlineColor = Color4b(0x33, 0x99, 0xFF, 0xFF),
+                    outlineWidth = 1.5f,
+                )
+
+                // Draw text lines (centered horizontally)
+                val lineY1 = cardY + 4f
+                val lineY2 = lineY1 + fontRenderer.height
+                val lineY3 = lineY2 + fontRenderer.height
+
+                fontRenderer.draw(this, line1, x - line1Width / 2f, lineY1,
+                    color = Color4b(0xFF, 0xFF, 0xFF, 0xFF), shadow = true)
+                fontRenderer.draw(this, line2, x - line2Width / 2f, lineY2,
+                    color = healthColor, shadow = true)
+                fontRenderer.draw(this, line3, x - line3Width / 2f, lineY3,
+                    color = Color4b(0xCC, 0xCC, 0xFF, 0xFF), shadow = true)
             }
         }
     }
