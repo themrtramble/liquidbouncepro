@@ -30,7 +30,7 @@ object CommandClientInfoSubcommand {
         literal("info") {
             exec {
                 chat(
-                    regular(t("info.clientName", variable(LiquidBounce.CLIENT_NAME))),
+                    regular(t("info.clientName", variable(LiquidBounce.CLIENT_DISPLAY_NAME))),
                     metadata = MessageMetadata(prefix = false)
                 )
                 chat(

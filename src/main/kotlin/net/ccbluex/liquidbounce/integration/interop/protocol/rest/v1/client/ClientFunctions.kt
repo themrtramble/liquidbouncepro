@@ -51,7 +51,7 @@ private fun Route.getClientInfo() = get("/info") {
         addProperty("os", Util.getPlatform().telemetryName())
         addProperty("gameVersion", mc.launchedVersion)
         addProperty("clientVersion", LiquidBounce.clientVersion)
-        addProperty("clientName", LiquidBounce.CLIENT_NAME)
+        addProperty("clientName", LiquidBounce.CLIENT_DISPLAY_NAME)
         addProperty("development", LiquidBounce.IN_DEVELOPMENT)
         addProperty("fps", mc.fps)
         addProperty("gameDir", mc.gameDirectory.path)

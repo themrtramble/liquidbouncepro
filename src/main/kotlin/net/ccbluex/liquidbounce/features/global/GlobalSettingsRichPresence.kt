@@ -242,7 +242,7 @@ object GlobalSettingsRichPresence : ToggleableValueGroup(
         SERVER("Server");
 
         fun getText(): String? = when (this) {
-            CLIENT_NAME -> LiquidBounce.CLIENT_NAME
+            CLIENT_NAME -> LiquidBounce.CLIENT_DISPLAY_NAME
             CLIENT_VERSION -> clientVersion
             CLIENT_AUTHOR -> LiquidBounce.CLIENT_AUTHOR
             MODULES_SUMMARY -> "${ModuleManager.count { it.running }}/${ModuleManager.count()} modules"

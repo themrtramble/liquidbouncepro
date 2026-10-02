@@ -175,7 +175,7 @@ public abstract class MixinMinecraft {
 
         LiquidBounce.INSTANCE.getLogger().debug("Modifying window title");
 
-        StringBuilder titleBuilder = new StringBuilder(LiquidBounce.CLIENT_NAME);
+        StringBuilder titleBuilder = new StringBuilder(LiquidBounce.CLIENT_DISPLAY_NAME);
         titleBuilder.append(" v");
         titleBuilder.append(LiquidBounce.INSTANCE.getClientVersion());
         titleBuilder.append(" ");

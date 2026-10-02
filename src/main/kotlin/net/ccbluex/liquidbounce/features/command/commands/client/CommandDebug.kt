@@ -98,7 +98,7 @@ object CommandDebug : CommandRegistrar {
         autoConfigPaste: String
     ) = JsonObject().apply {
         add("client", JsonObject().apply {
-            addProperty("name", LiquidBounce.CLIENT_NAME)
+            addProperty("name", LiquidBounce.CLIENT_DISPLAY_NAME)
             addProperty("version", LiquidBounce.clientVersion)
             addProperty("commit", LiquidBounce.clientCommit)
             addProperty("branch", LiquidBounce.clientBranch)

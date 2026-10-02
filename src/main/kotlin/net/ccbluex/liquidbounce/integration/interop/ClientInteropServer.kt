@@ -172,7 +172,7 @@ object ClientInteropServer {
     private fun Route.rootResponse() = get("/") {
         call.respondJsonWriter {
             beginObject()
-            name("name").value(LiquidBounce.CLIENT_NAME)
+            name("name").value(LiquidBounce.CLIENT_DISPLAY_NAME)
             name("version").value(LiquidBounce.clientVersion)
             name("author").value(LiquidBounce.CLIENT_AUTHOR)
             endObject()
