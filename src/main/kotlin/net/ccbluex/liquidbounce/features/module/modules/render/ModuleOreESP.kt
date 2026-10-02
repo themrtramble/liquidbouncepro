@@ -46,7 +46,6 @@ import net.minecraft.world.level.block.Blocks
 import net.minecraft.world.level.block.state.BlockState
 import net.minecraft.world.level.chunk.LevelChunk
 import net.minecraft.world.phys.shapes.VoxelShape
-import java.util.concurrent.ConcurrentSkipListSet
 import java.util.function.Predicate
 
 /**
@@ -85,34 +84,37 @@ object ModuleOreESP : ClientModule("OreESP", ModuleCategories.RENDER, aliases = 
     /**
      * All ore blocks tracked by this module. Includes deepslate and nether variants.
      */
-    private val oreBlocks: ConcurrentSkipListSet<Block> = blockSortedSetOf(
-        blocks = arrayOf(
-            // Overworld ores
-            Blocks.COAL_ORE,
-            Blocks.IRON_ORE,
-            Blocks.GOLD_ORE,
-            Blocks.DIAMOND_ORE,
-            Blocks.EMERALD_ORE,
-            Blocks.LAPIS_ORE,
-            Blocks.REDSTONE_ORE,
-            Blocks.COPPER_ORE,
+    private val oreBlocks by blocks(
+        "Ores",
+        blockSortedSetOf(
+            blocks = arrayOf(
+                // Overworld ores
+                Blocks.COAL_ORE,
+                Blocks.IRON_ORE,
+                Blocks.GOLD_ORE,
+                Blocks.DIAMOND_ORE,
+                Blocks.EMERALD_ORE,
+                Blocks.LAPIS_ORE,
+                Blocks.REDSTONE_ORE,
+                Blocks.COPPER_ORE,
 
-            // Deepslate variants
-            Blocks.DEEPSLATE_COAL_ORE,
-            Blocks.DEEPSLATE_IRON_ORE,
-            Blocks.DEEPSLATE_GOLD_ORE,
-            Blocks.DEEPSLATE_DIAMOND_ORE,
-            Blocks.DEEPSLATE_EMERALD_ORE,
-            Blocks.DEEPSLATE_LAPIS_ORE,
-            Blocks.DEEPSLATE_REDSTONE_ORE,
-            Blocks.DEEPSLATE_COPPER_ORE,
+                // Deepslate variants
+                Blocks.DEEPSLATE_COAL_ORE,
+                Blocks.DEEPSLATE_IRON_ORE,
+                Blocks.DEEPSLATE_GOLD_ORE,
+                Blocks.DEEPSLATE_DIAMOND_ORE,
+                Blocks.DEEPSLATE_EMERALD_ORE,
+                Blocks.DEEPSLATE_LAPIS_ORE,
+                Blocks.DEEPSLATE_REDSTONE_ORE,
+                Blocks.DEEPSLATE_COPPER_ORE,
 
-            // Nether ores
-            Blocks.NETHER_GOLD_ORE,
-            Blocks.NETHER_QUARTZ_ORE,
-            Blocks.ANCIENT_DEBRIS,
+                // Nether ores
+                Blocks.NETHER_GOLD_ORE,
+                Blocks.NETHER_QUARTZ_ORE,
+                Blocks.ANCIENT_DEBRIS,
+            )
         )
-    )
+    ).onChanged { markDirty() }
 
     @Suppress("unused")
     private val renderHandler = handler<WorldRenderEvent> { event ->
