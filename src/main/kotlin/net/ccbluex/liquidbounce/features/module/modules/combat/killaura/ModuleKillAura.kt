@@ -49,7 +49,9 @@ import net.ccbluex.liquidbounce.features.module.modules.render.ModuleDebug
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleDebug.debugGeometry
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleDebug.debugParameter
 import net.ccbluex.liquidbounce.render.engine.type.Color4b
+import net.ccbluex.liquidbounce.render.drawCircleOutline
 import net.ccbluex.liquidbounce.render.renderEnvironment
+import net.ccbluex.liquidbounce.render.withPositionRelativeToCamera
 import net.ccbluex.liquidbounce.utils.aiming.RotationManager
 import net.ccbluex.liquidbounce.utils.aiming.data.Rotation
 import net.ccbluex.liquidbounce.utils.aiming.data.RotationWithVector
@@ -140,10 +142,18 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
         tree(KillAuraRangeIndicator)
     }
 
+    /**
+     * Pro fork: list of all enemies attacked in the current tick.
+     * Used by the render handler to draw a blue circle on EACH attacked
+     * enemy (not just the primary target) when MultiTarget is enabled.
+     */
+    internal val multiTargetRenderList: MutableList<LivingEntity> = mutableListOf()
+
     override fun onDisabled() {
         targetTracker.reset()
         failedHits.clear()
         KillAuraNotifyWhenFail.failedHitsIncrement = 0
+        multiTargetRenderList.clear()
     }
 
     @Suppress("unused")
@@ -151,6 +161,16 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
         event.renderEnvironment {
             renderFailedHits()
             KillAuraRangeIndicator.render(this, event.partialTicks)
+
+            // Pro fork: draw a blue circle on EVERY attacked enemy when MultiTarget is on
+            if (multiTarget && multiTargetRenderList.isNotEmpty()) {
+                multiTargetRenderList.forEach { entity ->
+                    val pos = entity.position().add(0.0, entity.getEyeHeight(entity.pose).toDouble() * 0.5, 0.0)
+                    withPositionRelativeToCamera(pos.x, pos.y, pos.z) {
+                        drawCircleOutline(0.6f, Color4b(0x33, 0x99, 0xFF, 0xFF), noDepthTest = true)
+                    }
+                }
+            }
         }
     }
 
@@ -243,6 +263,9 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
         // returns null (entity behind wall, raytrace miss, etc.). This was the bug
         // that made multi-target not work in the previous build.
         if (multiTarget) {
+            multiTargetRenderList.clear()
+            multiTargetRenderList.add(crosshairTarget as? LivingEntity ?: return@tickHandler)
+
             val alreadyAttacked = hashSetOf(crosshairTarget)
             val candidates = targetTracker.targets()
                 .filter { it != crosshairTarget && it !in alreadyAttacked }
@@ -255,7 +278,6 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
                 if (extra !is LivingEntity || !extra.shouldBeAttacked()) continue
 
                 // GUARANTEED rotation towards this enemy — never null
-                // Try smart raytrace first, fall back to simple look-at
                 val extraRot = (findRotation(
                     extra, range.interactionRange, range.interactionThroughWallsRange
                 )?.rotation ?: Rotation.lookingAt(
@@ -275,6 +297,7 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
                 // Direct attack — bypasses clicker scheduler entirely
                 attackEntity(extra, SwingMode.DO_NOT_HIDE, keepSprint && !shouldBlockSprinting)
                 alreadyAttacked += extra
+                multiTargetRenderList.add(extra)
             }
         }
     }
