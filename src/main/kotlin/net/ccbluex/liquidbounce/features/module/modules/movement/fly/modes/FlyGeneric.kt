@@ -77,6 +77,15 @@ internal object FlyVanilla : Mode("Vanilla") {
         val vSpeed =
             if (useSprintSpeed) SprintSpeed.verticalSpeed else BaseSpeed.verticalSpeed
 
+        // Pro fork: enable vanilla flying physics so gravity does NOT pull the player
+        // down after this tick handler runs. Without this, setting deltaMovement.y = 0
+        // (glide default) gets overridden by vanilla gravity, causing the player to
+        // fall instead of hover. This is the same approach FlyCreative uses.
+        player.abilities.flying = true
+        // Reset fall distance every tick so disabling fly mid-air does not kill the
+        // player with accumulated fall damage.
+        player.fallDistance = 0.0f
+
         player.deltaMovement = player.deltaMovement.withStrafe(speed = hSpeed.toDouble())
         player.deltaMovement.y = when {
             mc.options.keyJump.isDown && !mc.options.keyShift.isDown -> vSpeed.toDouble()
@@ -91,6 +100,12 @@ internal object FlyVanilla : Mode("Vanilla") {
             player.deltaMovement.y = -0.04
             waitTicks(1)
         }
+    }
+
+    override fun disable() {
+        // Pro fork: turn flying OFF when leaving this mode so vanilla physics (gravity)
+        // resumes normally. Without this, the player stays in creative-flight state.
+        player.abilities.flying = false
     }
 
 }
@@ -132,6 +147,9 @@ internal object FlyCreative : Mode("Creative") {
             if (mc.options.keySprint.isDown && SprintSpeed.enabled) SprintSpeed.speed else speed
 
         if (forceFlight) player.abilities.flying = true
+        // Pro fork: reset fall distance so disabling FlyCreative mid-air does not
+        // kill the player with accumulated fall damage.
+        player.fallDistance = 0.0f
 
         if (player.deltaMovement.lengthSqr() > maxVelocity.sq()) {
             player.deltaMovement = player.deltaMovement.withLength(maxVelocity.toDouble())

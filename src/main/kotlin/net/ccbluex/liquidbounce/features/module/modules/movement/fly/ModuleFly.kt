@@ -122,11 +122,20 @@ object ModuleFly : ClientModule("Fly", ModuleCategories.MOVEMENT, aliases = list
 
     override fun onEnabled() {
         wasFlyingAllowed = player.abilities.mayfly
-        player.abilities.mayfly = false
+        // Pro fork: ENABLE mayfly instead of disabling it. The previous logic set
+        // mayfly = false on enable, which broke FlyCreative mode (creative flight
+        // requires mayfly=true to use the flying flag). With mayfly=true, both
+        // FlyVanilla and FlyCreative can set player.abilities.flying=true and
+        // have vanilla physics skip gravity for them.
+        player.abilities.mayfly = true
     }
 
     override fun onDisabled() {
+        // Pro fork: restore the saved mayfly state AND turn flying off so the
+        // player does not stay stuck in creative-flight state after disabling.
         player.abilities.mayfly = wasFlyingAllowed
+        player.abilities.flying = false
+        player.fallDistance = 0.0f
     }
 
     @Suppress("unused")
