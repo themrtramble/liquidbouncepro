@@ -101,6 +101,11 @@ open class TargetSelector(
 
     private val range = rangeValue.register(this)
     private val fov by float("FOV", 180f, 0f..180f)
+    /**
+     * Pro fork: default HurtTime threshold raised to 10 (max).
+     * Allows attacking enemies that are still in their hurt animation,
+     * so KillAura keeps chaining hits without waiting.
+     */
     private val hurtTime by int("HurtTime", 10, 0..10)
 
     @Suppress("unused", "UnusedPrivateProperty")

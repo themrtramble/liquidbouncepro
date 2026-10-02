@@ -23,7 +23,11 @@ import net.ccbluex.liquidbounce.utils.aiming.RotationsValueGroup
 
 object KillAuraRotationsValueGroup : RotationsValueGroup(ModuleKillAura, combatSpecific = true) {
 
-    val rotationTiming by enumChoice("RotationTiming", KillAuraRotationTiming.NORMAL)
+    /**
+     * Pro fork: default timing changed to SNAP — rotations snap to the target
+     * instantly on attack instead of smoothly gliding. Faster & more aggressive.
+     */
+    val rotationTiming by enumChoice("RotationTiming", KillAuraRotationTiming.SNAP)
     /**
      * Pro fork: aim through walls ON by default — KillAura will keep targeting
      * even when the enemy is briefly occluded.

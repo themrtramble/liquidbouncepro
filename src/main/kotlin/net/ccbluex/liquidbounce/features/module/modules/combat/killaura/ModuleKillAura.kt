@@ -101,6 +101,22 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
     private val criticalsSelectionMode by enumChoice("Criticals", CriticalsSelectionMode.SMART)
     private val keepSprint by boolean("KeepSprint", true)
 
+    /**
+     * Pro fork: multi-target ON by default.
+     *
+     * When enabled, KillAura will iterate over every valid enemy in range each tick
+     * and attack each one whose hit-test passes, instead of only the single best target.
+     * Combined with the higher MaxPerTick and no-cooldown defaults, this lets the client
+     * effectively fight whole crowds at once.
+     */
+    private val multiTarget by boolean("MultiTarget", true)
+
+    /**
+     * Pro fork: maximum number of distinct enemies to attack in a single tick when
+     * MultiTarget is enabled. Default 5 (was effectively 1).
+     */
+    private val multiTargetMaxPerTick by int("MultiTargetMaxPerTick", 5, 1..20, "targets")
+
     // Inventory Handling
     internal val ignoreOpenInventory by boolean("IgnoreOpenInventory", true)
     internal val simulateInventoryClosing by boolean("SimulateInventoryClosing", true)
@@ -216,6 +232,38 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
         }
 
         attackTarget(crosshairTarget, rotation)
+
+        // Pro fork: multi-target mode — swing through every other valid enemy in range
+        // within the same tick. Skips the one we already attacked above.
+        if (multiTarget) {
+            val alreadyAttacked = hashSetOf(crosshairTarget)
+            val candidates = targetTracker.targets()
+                .filter { it != crosshairTarget && it !in alreadyAttacked }
+                .take(multiTargetMaxPerTick - 1)
+
+            for (extra in candidates) {
+                if (CombatManager.shouldPauseCombat) break
+                if (!clicker.canExecuteClickNow() && !clicker.willClickAt(0)) break
+
+                val extraRot = (findRotation(extra, range.interactionRange, range.interactionThroughWallsRange)?.rotation
+                    ?: RotationManager.currentRotation ?: player.rotation).normalize()
+
+                val extraCrosshair = if (raycast != TRACE_NONE) {
+                    findEntityInCrosshair(range.interactionRange.toDouble(), extraRot, predicate = {
+                        when (raycast) {
+                            TRACE_ONLYENEMY -> it.shouldBeAttacked()
+                            TRACE_ALL -> true
+                            else -> false
+                        }
+                    })?.entity ?: extra
+                } else extra
+
+                if (extraCrosshair is LivingEntity && extraCrosshair.shouldBeAttacked()) {
+                    attackTarget(extraCrosshair, extraRot)
+                    alreadyAttacked += extraCrosshair
+                }
+            }
+        }
     }
 
     val shouldBlockSprinting

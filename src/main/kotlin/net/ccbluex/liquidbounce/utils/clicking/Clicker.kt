@@ -61,14 +61,15 @@ open class Clicker<T>(
 
     private val technique by enumChoice("Technique", ClickTechnique.HUMAN)
     /**
-     * Pro fork: default CPS buffed to 20..30 (was 11..14), max CPS raised to 100 (was 30).
+     * Pro fork: default CPS buffed to 30..50 (was 20..30 in earlier Pro build,
+     * originally 11..14 in vanilla) for noticeably faster attacks.
      */
-    private val cps by intRange("CPS", 20..30, 1..maxCps, "clicks")
+    private val cps by intRange("CPS", 30..50, 1..maxCps, "clicks")
     /**
-     * Pro fork: default max-per-tick raised to 4 (was 2) to allow burst attacks
-     * when cooldown is disabled.
+     * Pro fork: default max-per-tick raised to 5 (the absolute maximum).
+     * Combined with no cooldown this enables up to 5 attacks per tick.
      */
-    private val maxPerTick by int("MaxPerTick", 4, 1..5, "clicks")
+    private val maxPerTick by int("MaxPerTick", 5, 1..5, "clicks")
 
     init {
         itemCooldown?.let(this::tree)
