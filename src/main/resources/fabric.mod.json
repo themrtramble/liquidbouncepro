@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "id": "liquidbounce",
   "version": "${version}",
-  "name": "LiquidBounce",
-  "description": "A free mixin-based injection hacked-client for Minecraft using the Fabric modding toolchain.",
+  "name": "LiquidBouncePro",
+  "description": "LiquidBouncePro - a stronger fork of LiquidBounce with buffed KillAura (extended range, no cooldown, faster CPS).",
   "authors": [
     "CCBlueX"
   ],

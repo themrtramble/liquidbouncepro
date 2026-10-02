@@ -24,12 +24,17 @@ import net.ccbluex.liquidbounce.utils.aiming.RotationsValueGroup
 object KillAuraRotationsValueGroup : RotationsValueGroup(ModuleKillAura, combatSpecific = true) {
 
     val rotationTiming by enumChoice("RotationTiming", KillAuraRotationTiming.NORMAL)
-    val aimThroughWalls by boolean("ThroughWalls", false)
+    /**
+     * Pro fork: aim through walls ON by default — KillAura will keep targeting
+     * even when the enemy is briefly occluded.
+     */
+    val aimThroughWalls by boolean("ThroughWalls", true)
 
     /**
      * When enabled, if current rotation can still raytrace the target, skip rotating.
+     * Pro fork: ON by default for less suspicious aim jitter.
      */
-    val lazyRotation by boolean("LazyRotation", false)
+    val lazyRotation by boolean("LazyRotation", true)
 
     enum class KillAuraRotationTiming(override val tag: String) : Tagged {
         NORMAL("Normal"),

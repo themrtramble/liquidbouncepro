@@ -51,13 +51,16 @@ open class RangeValueGroup(
     /**
      * Increases the attack max-range.
      *
+     * Pro fork: maximum buffed to 10 blocks (vanilla cap was 5).
+     * Default value raised so the buff is felt out-of-the-box.
+     *
      * When min-range is introduced, rename from "RangeIncrease" to "MaxRangeIncrease"
      * and add "RangeIncrease" as an alias.
      */
     protected var maxRangeIncrease by float(
         "RangeIncrease",
         maxRangeIncrease,
-        0.0f..5f,
+        0.0f..10f,
         "blocks"
     )
 
@@ -76,11 +79,13 @@ open class RangeValueGroup(
     /**
      * This will use only this value for non-visible entities. Originally, we could never attack through walls,
      * so this makes sense to keep starting from 0.0.
+     *
+     * Pro fork: maximum buffed to 15 blocks (vanilla cap was 8).
      */
     protected var throughWallsRange by float(
         "ThroughWallsRange",
         throughWallsRange,
-        0f..8f,
+        0f..15f,
         "blocks"
     ).onChange {
         min(interactionRange, it)

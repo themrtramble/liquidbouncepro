@@ -50,7 +50,7 @@ open class Clicker<T>(
     val parent: T,
     val keyBinding: KeyMapping,
     val itemCooldown: ItemCooldown? = ItemCooldown(),
-    maxCps: Int = 30,
+    maxCps: Int = 100,
     name: String = "Clicker",
     simulateAttackKeyDown: Boolean = false,
 ) : ValueGroup(name, aliases = listOf("ClickScheduler")), EventListener where T : EventListener {
@@ -60,8 +60,15 @@ open class Clicker<T>(
     }
 
     private val technique by enumChoice("Technique", ClickTechnique.HUMAN)
-    private val cps by intRange("CPS", 11..14, 1..maxCps, "clicks")
-    private val maxPerTick by int("MaxPerTick", 2, 1..5, "clicks")
+    /**
+     * Pro fork: default CPS buffed to 20..30 (was 11..14), max CPS raised to 100 (was 30).
+     */
+    private val cps by intRange("CPS", 20..30, 1..maxCps, "clicks")
+    /**
+     * Pro fork: default max-per-tick raised to 4 (was 2) to allow burst attacks
+     * when cooldown is disabled.
+     */
+    private val maxPerTick by int("MaxPerTick", 4, 1..5, "clicks")
 
     init {
         itemCooldown?.let(this::tree)
@@ -71,11 +78,13 @@ open class Clicker<T>(
      * When missing a hit, Minecraft has a cooldown before you can attack again.
      * This option will consider the cooldown before attacking again.
      *
+     * Pro fork: default OFF — ignore the miss-cooldown so swings keep firing.
+     *
      * This is useful for anti-cheats that detect if you are ignoring this cooldown.
      * Applies to the FailSwing feature as well.
      */
     private val missCooldown: Value<Boolean>? = if (keyBinding == mc.options.keyAttack) {
-        boolean("MissCooldown", true, aliases = listOf("AttackCooldown"))
+        boolean("MissCooldown", false, aliases = listOf("AttackCooldown"))
     } else {
         null
     }

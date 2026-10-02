@@ -25,14 +25,23 @@ import net.minecraft.world.entity.player.Player
 
 open class ItemCooldown : ValueGroup("ItemCooldown", aliases = listOf("Cooldown")) {
 
+    /**
+     * Pro fork: minimum cooldown range set to 0.0..0.0 by default — attacks fire as soon
+     * as the click scheduler allows, ignoring vanilla attack-strength cooldown.
+     * The user can still raise it in the GUI if a server's anti-cheat complains.
+     */
     private val minimumCooldown by floatRange(
         "Minimum",
-        1.0f..1.0f, 0.0f..2.0f
+        0.0f..0.0f, 0.0f..2.0f
     )
 
     private var nextCooldown = minimumCooldown.random()
 
-    open fun isCooldownPassed(ticks: Int = 0) = cooldownProgress(ticks) >= nextCooldown
+    open fun isCooldownPassed(ticks: Int = 0): Boolean {
+        // Pro fork: when minimum cooldown is 0, always pass — no waiting for vanilla attack-strength.
+        if (nextCooldown <= 0.0f) return true
+        return cooldownProgress(ticks) >= nextCooldown
+    }
 
     /**
      * Calculates the current cooldown progress.

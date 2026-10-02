@@ -119,7 +119,12 @@ object LiquidBounce : EventListener {
      * WARNING: Please read the GNU General Public License
      */
     const val CLIENT_NAME = "LiquidBounce"
-    const val CLIENT_AUTHOR = "CCBlueX"
+    const val CLIENT_AUTHOR = "CCBlueX (Pro fork by MrTramble)"
+
+    /**
+     * Display brand shown in title bars, HUD, etc.
+     */
+    const val CLIENT_DISPLAY_NAME = "LiquidBouncePro"
 
     private object Client : Config("Client") {
         val version = text("Version", GitInfo.version())
@@ -481,7 +486,7 @@ object LiquidBounce : EventListener {
     @Suppress("unused")
     private val startHandler = handler<ClientStartEvent> {
         runCatching {
-            logger.info("Launching $CLIENT_NAME v$clientVersion by $CLIENT_AUTHOR")
+            logger.info("Launching $CLIENT_DISPLAY_NAME v$clientVersion by $CLIENT_AUTHOR")
             // Print client information
             logger.info("Client Version: $clientVersion ($clientCommit)")
             logger.info("Client Branch: $clientBranch")
