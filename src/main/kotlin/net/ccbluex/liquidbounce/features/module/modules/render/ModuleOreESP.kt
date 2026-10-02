@@ -27,6 +27,7 @@ import net.ccbluex.liquidbounce.features.module.ModuleCategories
 import net.ccbluex.liquidbounce.render.CachedMeshStorage
 import net.ccbluex.liquidbounce.render.ClientRenderPipelines
 import net.ccbluex.liquidbounce.render.GenericStaticColorMode
+import net.ccbluex.liquidbounce.render.OreTypeColorMode
 import net.ccbluex.liquidbounce.render.addShapeFaces
 import net.ccbluex.liquidbounce.render.addShapeOutlines
 import net.ccbluex.liquidbounce.render.buildMesh
@@ -67,11 +68,14 @@ object ModuleOreESP : ClientModule("OreESP", ModuleCategories.RENDER, aliases = 
     private val distanceFade = tree(DistanceFadeUniformValueGroup())
 
     /**
-     * Static color mode — uses the map color of each block by default.
-     * This means diamond ore will be cyan-ish, gold ore yellow, etc.
+     * Pro fork: Per-ore-type color mode.
+     * Each ore type gets its own distinct color:
+     * Diamond=cyan, Gold=yellow, Iron=orange, Coal=gray, Emerald=green,
+     * Lapis=blue, Redstone=red, Copper=orange, Ancient Debris=purple.
      */
     private val colorMode = choices("ColorMode", 0) {
         arrayOf(
+            OreTypeColorMode(it),
             net.ccbluex.liquidbounce.render.MapColorMode(it),
             GenericStaticColorMode(it, Color4b(255, 215, 0, 200)),
         )
