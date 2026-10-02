@@ -238,10 +238,10 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
         // Pro fork: multi-target mode — swing through every other valid enemy in range
         // within the same tick. Skips the one we already attacked above.
         //
-        // IMPORTANT: We do NOT use the clicker scheduler here, because the clicker only
-        // allows a fixed number of clicks per tick and the primary attack above already
-        // consumed them. Instead we call attackEntity() directly for each extra enemy.
-        // This is aggressive by design — servers WILL flag this, so the option is OFF-able.
+        // IMPORTANT FIX: We use Rotation.lookingAt() as a GUARANTEED fallback so we
+        // always have a valid rotation towards each extra enemy, even if findRotation()
+        // returns null (entity behind wall, raytrace miss, etc.). This was the bug
+        // that made multi-target not work in the previous build.
         if (multiTarget) {
             val alreadyAttacked = hashSetOf(crosshairTarget)
             val candidates = targetTracker.targets()
@@ -251,19 +251,19 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
             for (extra in candidates) {
                 if (CombatManager.shouldPauseCombat) break
 
-                // Skip if not a validatable target
+                // Skip if not attackable
                 if (extra !is LivingEntity || !extra.shouldBeAttacked()) continue
 
-                // Compute a rotation that aims at this enemy
-                val extraRot = (findRotation(extra, range.interactionRange, range.interactionThroughWallsRange)?.rotation
-                    ?: RotationManager.currentRotation
-                    ?: player.rotation).normalize()
+                // GUARANTEED rotation towards this enemy — never null
+                // Try smart raytrace first, fall back to simple look-at
+                val extraRot = (findRotation(
+                    extra, range.interactionRange, range.interactionThroughWallsRange
+                )?.rotation ?: Rotation.lookingAt(
+                    extra.position().add(0.0, extra.getEyeHeight(extra.pose).toDouble(), 0.0),
+                    player.eyePosition
+                )).normalize()
 
-                // Verify the enemy is in attack range (use squared distance as fast check)
-                val squaredDistance = extra.squaredBoxedDistanceTo(player)
-                if (squaredDistance > range.interactionRange.sq()) continue
-
-                // Send a rotation packet so the server thinks we're aiming at this enemy
+                // Send rotation packet so the server thinks we're aiming at this enemy
                 network.send(
                     net.minecraft.network.protocol.game.ServerboundMovePlayerPacket.PosRot(
                         player.x, player.y, player.z,
