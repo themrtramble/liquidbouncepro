@@ -33,7 +33,6 @@ import net.ccbluex.liquidbounce.event.tickHandler
 import net.ccbluex.liquidbounce.event.waitTicks
 import net.ccbluex.liquidbounce.features.module.modules.movement.fly.ModuleFly
 import net.ccbluex.liquidbounce.utils.client.chat
-import net.ccbluex.liquidbounce.utils.client.network
 import net.ccbluex.liquidbounce.utils.entity.withStrafe
 import net.ccbluex.liquidbounce.utils.math.sq
 import net.ccbluex.liquidbounce.utils.math.withLength
@@ -53,13 +52,13 @@ internal object FlyVanilla : Mode("Vanilla") {
     private val bypassVanillaCheck by boolean("BypassVanillaCheck", true)
 
     object BaseSpeed : ValueGroup("BaseSpeed") {
-        val horizontalSpeed by float("Horizontal", 1.0f, 0.1f..10f)
-        val verticalSpeed by float("Vertical", 1.0f, 0.1f..10f)
+        val horizontalSpeed by float("Horizontal", 0.44f, 0.1f..10f)
+        val verticalSpeed by float("Vertical", 0.44f, 0.1f..10f)
     }
 
     object SprintSpeed : ToggleableValueGroup(this, "SprintSpeed", true) {
-        val horizontalSpeed by float("Horizontal", 2.0f, 0.1f..10f)
-        val verticalSpeed by float("Vertical", 2.0f, 0.1f..10f)
+        val horizontalSpeed by float("Horizontal", 1f, 0.1f..10f)
+        val verticalSpeed by float("Vertical", 1f, 0.1f..10f)
     }
 
     init {
@@ -85,16 +84,12 @@ internal object FlyVanilla : Mode("Vanilla") {
             else -> glide.toDouble()
         }
 
-        // Pro fork fix: vanilla fly bypass WITHOUT using waitTicks (which caused stuck)
-        // Every 40 ticks, send a fake "on ground" packet to reset vanilla fly check
-        // This is non-blocking and won't cause the player to get stuck
+        // Most basic bypass for vanilla fly check
+        // This can also be done via packets, but this is easier.
         if (bypassVanillaCheck && player.tickCount % 40 == 0) {
-            // Just send a position packet with onGround=true — no tick waiting
-            network.send(
-                ServerboundMovePlayerPacket.Pos(
-                    player.x, player.y, player.z, true, player.horizontalCollision
-                )
-            )
+            waitTicks(1)
+            player.deltaMovement.y = -0.04
+            waitTicks(1)
         }
     }
 
