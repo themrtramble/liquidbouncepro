@@ -92,8 +92,7 @@ internal object FlyVanilla : Mode("Vanilla") {
             // Just send a position packet with onGround=true — no tick waiting
             network.send(
                 ServerboundMovePlayerPacket.Pos(
-                    player.x, player.y, player.z,
-                    true
+                    player.x, player.y, player.z, true, player.horizontalCollision
                 )
             )
         }
