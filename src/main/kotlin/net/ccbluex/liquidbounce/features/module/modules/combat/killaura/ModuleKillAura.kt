@@ -73,6 +73,7 @@ import net.ccbluex.liquidbounce.utils.raytracing.isLookingAtEntity
 import net.ccbluex.liquidbounce.utils.render.TargetRenderer
 import net.ccbluex.liquidbounce.utils.client.network
 import net.ccbluex.liquidbounce.utils.client.player
+import net.ccbluex.liquidbounce.utils.client.world
 import net.minecraft.client.gui.screens.inventory.ContainerScreen
 import net.minecraft.world.entity.Entity
 import net.minecraft.world.entity.LivingEntity
@@ -255,27 +256,30 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
 
         attackTarget(crosshairTarget, rotation)
 
-        // Pro fork: multi-target mode — swing through every other valid enemy in range
-        // within the same tick. Skips the one we already attacked above.
-        //
-        // IMPORTANT FIX: We use Rotation.lookingAt() as a GUARANTEED fallback so we
-        // always have a valid rotation towards each extra enemy, even if findRotation()
-        // returns null (entity behind wall, raytrace miss, etc.). This was the bug
-        // that made multi-target not work in the previous build.
+        // Pro fork: multi-target mode — attack every valid enemy in the world,
+        // not just those in interactionRange. This bypasses the targetTracker's
+        // range filter so we hit everyone (server still has its own range check
+        // — but the attack packet is sent regardless).
         if (multiTarget) {
             multiTargetRenderList.clear()
-            multiTargetRenderList.add(crosshairTarget as? LivingEntity ?: return@tickHandler)
+            (crosshairTarget as? LivingEntity)?.let { multiTargetRenderList.add(it) }
 
             val alreadyAttacked = hashSetOf(crosshairTarget)
-            val candidates = targetTracker.targets()
-                .filter { it != crosshairTarget && it !in alreadyAttacked }
+
+            // Use world.entitiesForRendering() directly — bypasses targetTracker range filter
+            // so we get EVERY LivingEntity in the world (validates with shouldBeAttacked only)
+            val candidates = world.entitiesForRendering()
+                .filterIsInstance<LivingEntity>()
+                .filter { entity ->
+                    entity !== player &&
+                    !entity.isRemoved &&
+                    entity.shouldBeAttacked() &&
+                    entity !in alreadyAttacked
+                }
                 .take(multiTargetMaxPerTick - 1)
 
             for (extra in candidates) {
                 if (CombatManager.shouldPauseCombat) break
-
-                // Skip if not attackable
-                if (extra !is LivingEntity || !extra.shouldBeAttacked()) continue
 
                 // GUARANTEED rotation towards this enemy — never null
                 val extraRot = (findRotation(
