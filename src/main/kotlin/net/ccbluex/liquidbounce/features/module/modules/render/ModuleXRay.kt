@@ -144,7 +144,7 @@ object ModuleXRay : ClientModule("XRay", ModuleCategories.RENDER) {
     private val exposedOnly by boolean("ExposedOnly", false)
         .onChanged(valueChangedReload)
 
-    val backgroundOpacity by int("BackgroundOpacity", 0, 0..255)
+    val backgroundOpacity by int("BackgroundOpacity", 100, 0..255)
         .onChanged(valueChangedReload)
 
     private val defaultBlocks = arrayOf<Block>(
