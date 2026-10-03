@@ -23,7 +23,6 @@ import net.ccbluex.liquidbounce.config.types.list.Tagged
 import net.ccbluex.liquidbounce.event.events.RotationUpdateEvent
 import net.ccbluex.liquidbounce.event.events.SprintEvent
 import net.ccbluex.liquidbounce.event.events.WorldRenderEvent
-import net.ccbluex.liquidbounce.event.events.OverlayRenderEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.event.tickHandler
 import net.ccbluex.liquidbounce.features.misc.FriendManager
@@ -52,10 +51,8 @@ import net.ccbluex.liquidbounce.features.module.modules.render.ModuleDebug.debug
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleDebug.debugParameter
 import net.ccbluex.liquidbounce.render.engine.type.Color4b
 import net.ccbluex.liquidbounce.render.drawRoundedRect
-import net.ccbluex.liquidbounce.render.FontManager
 import net.ccbluex.liquidbounce.render.renderEnvironment
 import net.ccbluex.liquidbounce.render.withPositionRelativeToCamera
-import net.ccbluex.liquidbounce.utils.render.WorldToScreen
 import net.ccbluex.liquidbounce.utils.entity.interpolateCurrentPosition
 import net.ccbluex.liquidbounce.utils.entity.getActualHealth
 import net.ccbluex.liquidbounce.utils.aiming.RotationManager
@@ -110,113 +107,48 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
     // Bypass techniques
     internal val raycast by enumChoice("Raycast", TRACE_ALL)
     /**
-     * Criticals selection mode. With RageMode OFF, default is SMART (legit,
-     * waits for crit on fall). With RageMode ON, override to IGNORE (no
-     * waiting - attack at full speed regardless of crit state).
+     * Pro fork: default Criticals selection mode = IGNORE (was SMART).
+     *
+     * SMART mode pauses KillAura while the player is jumping/falling to wait for
+     * a guaranteed crit — which means the attack rate visibly drops whenever the
+     * user manually jumps. With IGNORE mode, KillAura attacks at full speed
+     * regardless of whether a crit is possible, so:
+     *   - Manual jumps no longer slow down KillAura (speed stays the same)
+     *   - Crits still land whenever the player happens to be falling (fallDistance > 0)
+     *
+     * Trade-off: ~30% fewer crits in exchange for an uninterrupted attack rate.
+     * Set this back to SMART if you prefer guaranteed crits over attack speed.
      */
     private val criticalsSelectionMode by enumChoice("Criticals", CriticalsSelectionMode.SMART)
     private val keepSprint by boolean("KeepSprint", true)
 
     /**
-     * Pro fork: RAGE INTENSITY slider (0..100%) - replaces the on/off RageMode toggle.
-     *
-     * 0%  = safe balanced (anti-ban default):
-     *       - MultiTarget: respects user toggle (default OFF)
-     *       - Criticals: SMART (legit crits)
-     *       - multiTargetCooldown: 1 tick (believable)
-     *       - multiTargetMaxPerTick: 5 (believable)
-     *
-     * 100% = full annihilation (no anti-ban):
-     *       - MultiTarget: forced ON
-     *       - Criticals: IGNORE (no crit wait)
-     *       - multiTargetCooldown: 0 (every tick per enemy)
-     *       - multiTargetMaxPerTick: 20 (all 20 enemies)
-     *       - 60 CPS × 20 enemies = ~1200 attacks/sec, enemies die instantly
-     *
-     * 50% = balanced (still strong but a bit safer):
-     *       - MultiTarget: forced ON
-     *       - Criticals: SMART (50% chance per tick, gradually IGNORE)
-     *       - multiTargetCooldown: 1 tick
-     *       - multiTargetMaxPerTick: ~12 (between 5 and 20)
-     *
-     * Default 0% = anti-ban. User cranks up to whatever they want.
-     */
-    private val rageIntensity by int("RageIntensity", 0, 0..100, "%",
-        aliases = listOf("RageMode", "Annihilation"))
-
-    /**
-     * Helper: rageLevel 0..1 (rageIntensity / 100). 0 = safe, 1 = full annihilation.
-     */
-    private val rageLevel: Float
-        get() = rageIntensity.coerceIn(0, 100) / 100f
-
-    /**
-     * Pro fork: MultiTarget is OFF by default.
+     * Pro fork: multi-target ON by default.
      *
      * When enabled, KillAura will iterate over every valid enemy in the world each tick
      * and attack each one whose hit-test passes, instead of only the single best target.
-     *
-     * Default OFF so KillAura behaves like a normal single-target aura (safe + legit).
-     * With RageMode ON, MultiTarget is automatically treated as ON regardless of this
-     * toggle - RageMode forces crowd-clearing.
+     * Combined with the higher MaxPerTick and no-cooldown defaults, this lets the client
+     * effectively fight whole crowds at once.
      */
-    private val multiTarget by boolean("MultiTarget", false)
+    private val multiTarget by boolean("MultiTarget", true)
 
     /**
-     * Maximum number of distinct enemies to attack in a single tick when
-     * MultiTarget is enabled. Default 20 = max crowd clear.
-     * Interpolated up to 20 by RageIntensity slider (stays 20 at 100%).
+     * Pro fork: maximum number of distinct enemies to attack in a single tick when
+     * MultiTarget is enabled. Raised from 3 to 10 so the client can effectively
+     * fight whole crowds at once. Combined with multiTargetCooldown=0 (below),
+     * every enemy in range gets hit every single tick.
      */
     private val multiTargetMaxPerTick by int("MultiTargetMaxPerTick", 20, 1..50, "targets")
 
     /**
-     * Cooldown (in ticks) between attacks on the SAME enemy when multi-target
-     * is enabled. Default 0 = attack every tick (max 60 hits/sec per enemy).
-     * Interpolated down to 0 by RageIntensity (already 0 at 0%).
+     * Pro fork: cooldown (in ticks) between attacks on the SAME enemy when multi-target
+     * is enabled. Default 0 = attack every tick. With CPS 200..500 and MaxPerTick 10,
+     * this produces the fastest possible multi-target attack rate.
+     *
+     * Set higher (e.g. 2) if the server's anti-cheat starts flagging for too many
+     * attack packets per second per enemy.
      */
-    private val multiTargetCooldown by int("MultiTargetCooldown", 0, 0..20, "ticks")
-
-    /**
-     * Effective multi-target enabled state.
-     * - rageLevel = 0: respects user toggle (default OFF)
-     * - rageLevel > 0: forced ON (any rage activates crowd-clearing)
-     */
-    private val effectiveMultiTarget: Boolean
-        get() = multiTarget || rageLevel > 0f
-
-    /**
-     * Effective multi-target max per tick, interpolated by rageLevel.
-     * - rageLevel 0   -> user value (5)
-     * - rageLevel 0.5 -> ~12
-     * - rageLevel 1   -> 20
-     */
-    private val effectiveMultiTargetMaxPerTick: Int
-        get() {
-            val base = multiTargetMaxPerTick
-            val rage = 20
-            return (base + (rage - base) * rageLevel).toInt().coerceIn(1, 50)
-        }
-
-    /**
-     * Effective multi-target cooldown (in ticks), interpolated by rageLevel.
-     * - rageLevel 0 -> user value (1 tick)
-     * - rageLevel 1 -> 0 ticks (no cooldown)
-     */
-    private val effectiveMultiTargetCooldown: Int
-        get() {
-            val base = multiTargetCooldown
-            return (base * (1f - rageLevel)).toInt().coerceIn(0, 20)
-        }
-
-    /**
-     * Effective criticals selection mode, interpolated by rageLevel.
-     * - rageLevel 0   -> user value (SMART)
-     * - rageLevel > 0.5 -> IGNORE (no crit wait)
-     * - rageLevel 0..0.5 -> still SMART (gradually less likely to wait,
-     *   but here we just switch at threshold for simplicity)
-     */
-    private val effectiveCriticalsSelectionMode: CriticalsSelectionMode
-        get() = if (rageLevel >= 0.5f) CriticalsSelectionMode.IGNORE else criticalsSelectionMode
+    private val multiTargetCooldown by int("MultiTargetCooldown", 1, 0..20, "ticks")
 
     /**
      * Pro fork: tracks the last tick each enemy was attacked, so we don't spam the same
@@ -265,6 +197,7 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
         event.renderEnvironment {
             renderFailedHits()
             KillAuraRangeIndicator.render(this, event.partialTicks)
+            // Pro fork: card rendering moved to OverlayRenderEvent (2D HUD overlay)
         }
     }
 
@@ -358,7 +291,7 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
         // 4. Default maxPerTick reduced from 5 to 3 — less packets per tick
         //
         // Total packet reduction: ~70% (was 200/sec, now ~60/sec with default settings)
-        if (effectiveMultiTarget) {
+        if (multiTarget) {
             multiTargetRenderList.clear()
             (crosshairTarget as? LivingEntity)?.let { multiTargetRenderList.add(it) }
 
@@ -370,11 +303,9 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
                 multiTargetLastAttackTick.entries.removeIf { currentTick - it.value > 200 }
             }
 
-            // Find all attackable enemies within KillAura range.
-            // Apply per-enemy cooldown to prevent spamming the same enemy every tick.
-            // SAFETY: NEVER attack friends — explicit FriendManager check.
-            // Sort by distance so we hit closest enemies first (more reliable hit-test).
-            val maxRangeSq = range.interactionRange.sq()
+            // Find all attackable enemies in the world (NO range filter — hits everyone)
+            // Apply per-enemy cooldown to prevent spamming the same enemy every tick
+            // SAFETY: NEVER attack friends — explicit FriendManager check
             val candidates = world.entitiesForRendering()
                 .filterIsInstance<LivingEntity>()
                 .filter { entity ->
@@ -384,23 +315,15 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
                         entity !in alreadyAttacked &&
                         // Pro fork: NEVER attack friends, regardless of GlobalSettings
                         !FriendManager.isFriend(entity) &&
-                        // Range check — only attack enemies within KillAura interactionRange
-                        player.squaredBoxedDistanceTo(entity) <= maxRangeSq &&
-                        // Per-enemy cooldown check (effective = 0 when RageIntensity > 0)
+                        // Per-enemy cooldown check
                         (multiTargetLastAttackTick[entity.id]?.let {
-                            currentTick - it >= effectiveMultiTargetCooldown
+                            currentTick - it >= multiTargetCooldown
                         } ?: true)
                 }
-                .sortedBy { player.squaredBoxedDistanceTo(it) }
-                .take(effectiveMultiTargetMaxPerTick - 1)
+                .take(multiTargetMaxPerTick - 1)
 
             for (extra in candidates) {
                 if (CombatManager.shouldPauseCombat) break
-
-                // Pro fork: also check canAttackNow for extras so we don't waste
-                // attack packets when item is on cooldown, inventory is open, or
-                // critical hit is not yet possible. Matches primary target behavior.
-                if (!canAttackNow(extra, player.mainHandItem)) continue
 
                 // SIMPLE rotation — no raytrace overhead (findRotation is expensive)
                 // Just look at the enemy's eye position directly
@@ -430,7 +353,7 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
 
     val shouldBlockSprinting
         get() = !ModuleElytraTarget.running
-            && effectiveCriticalsSelectionMode.shouldStopSprinting(clicker, targetTracker.target)
+            && criticalsSelectionMode.shouldStopSprinting(clicker, targetTracker.target)
 
     @Suppress("unused")
     private val sprintHandler = handler<SprintEvent> { event ->
@@ -666,7 +589,7 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
             return false
         }
 
-        val criticalHitAllowed = target == null || player.isFallFlying || effectiveCriticalsSelectionMode.isCriticalHit()
+        val criticalHitAllowed = target == null || player.isFallFlying || criticalsSelectionMode.isCriticalHit()
         if (!criticalHitAllowed) {
             return false
         }
