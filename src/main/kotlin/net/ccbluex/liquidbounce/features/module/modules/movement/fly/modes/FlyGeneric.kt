@@ -182,7 +182,11 @@ internal object FlyCreative : Mode("Creative") {
         player.abilities.flyingSpeed =
             if (mc.options.keySprint.isDown && SprintSpeed.enabled) SprintSpeed.speed else speed
 
-        if (forceFlight) player.abilities.flying = true
+        // Pro fork: force mayfly too because vanilla physics resets it in survival.
+        if (forceFlight) {
+            player.abilities.mayfly = true
+            player.abilities.flying = true
+        }
         // Pro fork: reset fall distance so disabling FlyCreative mid-air does not
         // kill the player with accumulated fall damage.
         player.fallDistance = 0.0

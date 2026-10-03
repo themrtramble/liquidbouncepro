@@ -62,7 +62,7 @@ import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket
 object ModuleFly : ClientModule("Fly", ModuleCategories.MOVEMENT, aliases = listOf("Glide", "Jetpack")) {
 
     internal val modes = choices(
-        "Mode", FlyVanilla, arrayOf(
+        "Mode", FlyCreative, arrayOf(
             // Generic fly modes
             FlyVanilla,
             FlyCreative,
