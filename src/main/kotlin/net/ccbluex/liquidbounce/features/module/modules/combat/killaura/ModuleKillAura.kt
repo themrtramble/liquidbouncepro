@@ -110,29 +110,47 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
     // Bypass techniques
     internal val raycast by enumChoice("Raycast", TRACE_ALL)
     /**
-     * Pro fork: default Criticals selection mode = SMART (was IGNORE).
-     *
-     * SMART mode waits for guaranteed crits when player is falling. This is
-     * what legit players do - they jump and let the crit land. IGNORE mode
-     * attacks blindly without crit, which anti-cheats flag as bot behavior.
-     *
-     * Trade-off: SMART = slower when jumping but more legit-looking + crits
-     * IGNORE = full speed but no crit + suspicious to anti-cheats
-     *
-     * Using SMART for anti-ban. Manual jump will pause briefly to land crit.
+     * Criticals selection mode. With RageMode OFF, default is SMART (legit,
+     * waits for crit on fall). With RageMode ON, override to IGNORE (no
+     * waiting - attack at full speed regardless of crit state).
      */
     private val criticalsSelectionMode by enumChoice("Criticals", CriticalsSelectionMode.SMART)
     private val keepSprint by boolean("KeepSprint", true)
 
     /**
-     * Pro fork: multi-target ON by default.
+     * Pro fork: RAGE MODE - "Annihilation" toggle.
+     *
+     * OFF (default): safe balanced KillAura - 60 CPS, 1 attack/tick/enemy,
+     *   1-tick cooldown per enemy, SMART crits. Anti-cheat believable.
+     *
+     * ON: ULTRA-teej rage mode - 60 CPS but MaxPerTick effectively 20,
+     *   multiTargetCooldown 0, multiTargetMaxPerTick 20, criticals IGNORE.
+     *   Effectively: 60 CPS × 20 enemies = 1200 attacks/sec distributed.
+     *   Enemies die instantly. No chance to react. No anti-ban.
+     *   ONLY use this on servers where you don't care about bans.
+     *
+     * Naming: called "RageMode" in code, "Annihilation" displayed to user
+     * (kills enemies so fast they don't even get a chance to fight back).
+     */
+    private val rageMode by boolean("RageMode", false, aliases = listOf("Annihilation"))
+
+    /**
+     * Pro fork: MultiTarget is OFF by default.
      *
      * When enabled, KillAura will iterate over every valid enemy in the world each tick
      * and attack each one whose hit-test passes, instead of only the single best target.
-     * Combined with the higher MaxPerTick and no-cooldown defaults, this lets the client
-     * effectively fight whole crowds at once.
+     *
+     * Default OFF so KillAura behaves like a normal single-target aura (safe + legit).
+     * With RageMode ON, MultiTarget is automatically treated as ON regardless of this
+     * toggle - RageMode forces crowd-clearing.
      */
-    private val multiTarget by boolean("MultiTarget", true)
+    private val multiTarget by boolean("MultiTarget", false)
+
+    /**
+     * Effective multi-target enabled state: ON if user enabled it OR RageMode is ON.
+     */
+    private val effectiveMultiTarget: Boolean
+        get() = multiTarget || rageMode
 
     /**
      * Pro fork: maximum number of distinct enemies to attack in a single tick when
@@ -140,6 +158,8 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
      * on different enemies is impossible for a human and gets flagged by anti-cheats.
      * 5 enemies/tick is still extremely aggressive but believable for a pro player
      * with fast reflexes.
+     *
+     * With RageMode ON, effective value becomes 20 (max enemies per tick).
      */
     private val multiTargetMaxPerTick by int("MultiTargetMaxPerTick", 5, 1..50, "targets")
 
@@ -147,8 +167,28 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
      * Pro fork: cooldown (in ticks) between attacks on the SAME enemy when multi-target
      * is enabled. Default 1 tick = 20 attacks/sec per enemy (smooth, fast, believable).
      * Setting 0 = attack every tick = 60+ attacks/sec/enemy which anti-cheats detect.
+     *
+     * With RageMode ON, effective value becomes 0 (no cooldown).
      */
     private val multiTargetCooldown by int("MultiTargetCooldown", 1, 0..20, "ticks")
+
+    /**
+     * Effective multi-target max per tick, considering RageMode override.
+     */
+    private val effectiveMultiTargetMaxPerTick: Int
+        get() = if (rageMode) 20 else multiTargetMaxPerTick
+
+    /**
+     * Effective multi-target cooldown, considering RageMode override.
+     */
+    private val effectiveMultiTargetCooldown: Int
+        get() = if (rageMode) 0 else multiTargetCooldown
+
+    /**
+     * Effective criticals selection mode, considering RageMode override.
+     */
+    private val effectiveCriticalsSelectionMode: CriticalsSelectionMode
+        get() = if (rageMode) CriticalsSelectionMode.IGNORE else criticalsSelectionMode
 
     /**
      * Pro fork: tracks the last tick each enemy was attacked, so we don't spam the same
@@ -197,91 +237,6 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
         event.renderEnvironment {
             renderFailedHits()
             KillAuraRangeIndicator.render(this, event.partialTicks)
-            // Pro fork: card rendering moved to OverlayRenderEvent (2D HUD overlay)
-        }
-    }
-
-    /**
-     * Pro fork: real-time HUD card on every attacked enemy.
-     *
-     * Draws a card above each enemy in multiTargetRenderList showing:
-     * - Enemy name
-     * - Health (hearts ❤ and numeric)
-     * - Armor value
-     * - Distance from player
-     *
-     * This is a 2D overlay rendered on top of the world, projected from the enemy's
-     * 3D position to screen coordinates.
-     */
-    @Suppress("unused")
-    private val cardRenderHandler = handler<OverlayRenderEvent> { event ->
-        if (!multiTarget || multiTargetRenderList.isEmpty()) return@handler
-
-        val fontRenderer = FontManager.FONT_RENDERER
-        val tickDelta = event.tickDelta
-
-        event.context.run {
-            multiTargetRenderList.forEach { entity ->
-                // Project entity head position to screen coordinates
-                val worldPos = entity.interpolateCurrentPosition(tickDelta)
-                    .add(0.0, entity.getEyeHeight(entity.pose) + 0.8, 0.0)
-                val screenPos = WorldToScreen.calculateScreenPos(worldPos) ?: return@forEach
-
-                val x = screenPos.x
-                val y = screenPos.y
-
-                // Build card text
-                val name = entity.displayName?.string ?: entity.scoreboardName
-                val health = entity.getActualHealth()
-                val armor = entity.armorValue
-                val distance = player.position().distanceTo(entity.position())
-
-                // Health color: green (full) -> yellow -> red (low)
-                val maxHealth = entity.maxHealth.coerceAtLeast(1f)
-                val healthPct = (health / maxHealth).coerceIn(0f, 1f)
-                val healthColor = when {
-                    healthPct > 0.5f -> Color4b(0x4C, 0xE0, 0x4C, 0xFF) // green
-                    healthPct > 0.25f -> Color4b(0xE0, 0xC0, 0x4C, 0xFF) // yellow
-                    else -> Color4b(0xE0, 0x4C, 0x4C, 0xFF) // red
-                }
-
-                // Build each line of text as a Component (fontRenderer.draw takes Component)
-                val line1 = net.minecraft.network.chat.Component.literal(name)
-                val line2 = net.minecraft.network.chat.Component.literal("HP ${"%.1f".format(health)}  AR ${armor}")
-                val line3 = net.minecraft.network.chat.Component.literal("${"%.1f".format(distance)}m  [ATK]")
-
-                val line1Width = fontRenderer.getStringWidth(line1, shadow = true)
-                val line2Width = fontRenderer.getStringWidth(line2, shadow = true)
-                val line3Width = fontRenderer.getStringWidth(line3, shadow = true)
-                val maxTextWidth = maxOf(line1Width, line2Width, line3Width)
-
-                val cardWidth = maxTextWidth + 16f
-                val cardHeight = fontRenderer.height * 3f + 12f
-                val cardX = x - cardWidth / 2f
-                val cardY = y - cardHeight - 4f
-
-                // Draw card background (dark with blue outline)
-                drawRoundedRect(
-                    x1 = cardX, y1 = cardY,
-                    x2 = cardX + cardWidth, y2 = cardY + cardHeight,
-                    radius = 4f,
-                    fillColor = Color4b(0x10, 0x10, 0x20, 0xCC),
-                    outlineColor = Color4b(0x33, 0x99, 0xFF, 0xFF),
-                    outlineWidth = 1.5f,
-                )
-
-                // Draw text lines (centered horizontally)
-                val lineY1 = cardY + 4f
-                val lineY2 = lineY1 + fontRenderer.height
-                val lineY3 = lineY2 + fontRenderer.height
-
-                fontRenderer.draw(this, line1, x - line1Width / 2f, lineY1,
-                    color = Color4b(0xFF, 0xFF, 0xFF, 0xFF), shadow = true)
-                fontRenderer.draw(this, line2, x - line2Width / 2f, lineY2,
-                    color = healthColor, shadow = true)
-                fontRenderer.draw(this, line3, x - line3Width / 2f, lineY3,
-                    color = Color4b(0xCC, 0xCC, 0xFF, 0xFF), shadow = true)
-            }
         }
     }
 
@@ -375,7 +330,7 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
         // 4. Default maxPerTick reduced from 5 to 3 — less packets per tick
         //
         // Total packet reduction: ~70% (was 200/sec, now ~60/sec with default settings)
-        if (multiTarget) {
+        if (effectiveMultiTarget) {
             multiTargetRenderList.clear()
             (crosshairTarget as? LivingEntity)?.let { multiTargetRenderList.add(it) }
 
@@ -399,12 +354,12 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
                         entity !in alreadyAttacked &&
                         // Pro fork: NEVER attack friends, regardless of GlobalSettings
                         !FriendManager.isFriend(entity) &&
-                        // Per-enemy cooldown check
+                        // Per-enemy cooldown check (effective = 0 when RageMode ON)
                         (multiTargetLastAttackTick[entity.id]?.let {
-                            currentTick - it >= multiTargetCooldown
+                            currentTick - it >= effectiveMultiTargetCooldown
                         } ?: true)
                 }
-                .take(multiTargetMaxPerTick - 1)
+                .take(effectiveMultiTargetMaxPerTick - 1)
 
             for (extra in candidates) {
                 if (CombatManager.shouldPauseCombat) break
@@ -437,7 +392,7 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
 
     val shouldBlockSprinting
         get() = !ModuleElytraTarget.running
-            && criticalsSelectionMode.shouldStopSprinting(clicker, targetTracker.target)
+            && effectiveCriticalsSelectionMode.shouldStopSprinting(clicker, targetTracker.target)
 
     @Suppress("unused")
     private val sprintHandler = handler<SprintEvent> { event ->
@@ -673,7 +628,7 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
             return false
         }
 
-        val criticalHitAllowed = target == null || player.isFallFlying || criticalsSelectionMode.isCriticalHit()
+        val criticalHitAllowed = target == null || player.isFallFlying || effectiveCriticalsSelectionMode.isCriticalHit()
         if (!criticalHitAllowed) {
             return false
         }
