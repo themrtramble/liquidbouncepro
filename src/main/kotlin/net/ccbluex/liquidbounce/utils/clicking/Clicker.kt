@@ -50,7 +50,7 @@ open class Clicker<T>(
     val parent: T,
     val keyBinding: KeyMapping,
     val itemCooldown: ItemCooldown? = ItemCooldown(),
-    maxCps: Int = 60,
+    maxCps: Int = 5000,
     name: String = "Clicker",
     simulateAttackKeyDown: Boolean = false,
 ) : ValueGroup(name, aliases = listOf("ClickScheduler")), EventListener where T : EventListener {
@@ -61,17 +61,15 @@ open class Clicker<T>(
 
     private val technique by enumChoice("Technique", ClickTechnique.HUMAN)
     /**
-     * Pro fork: CPS hard-capped at 60. Slider cannot exceed 60.
-     * Default 55..60 = max aggressive but anti-cheat believable.
-     * 60 CPS = max humanly possible click rate, no anti-cheat flags it.
+     * Pro fork: default CPS 500..1000 (ULTRA-fast). maxCps cap = 5000.
+     * User can crank slider up to 5000 CPS in ClickGUI if server allows.
      */
-    private val cps by intRange("CPS", 55..60, 1..maxCps, "clicks")
+    private val cps by intRange("CPS", 500..1000, 1..maxCps, "clicks")
     /**
-     * Pro fork: MaxPerTick default 1 = one attack per tick per enemy.
-     * At 60 CPS this means one click per tick = max speed possible
-     * while looking like a fast human clicker.
+     * Pro fork: MaxPerTick default 20 = max 20 attacks per tick per enemy.
+     * Combined with CPS 500..1000, this enables extremely fast attack rates.
      */
-    private val maxPerTick by int("MaxPerTick", 1, 1..50, "clicks")
+    private val maxPerTick by int("MaxPerTick", 20, 1..50, "clicks")
 
     init {
         itemCooldown?.let(this::tree)

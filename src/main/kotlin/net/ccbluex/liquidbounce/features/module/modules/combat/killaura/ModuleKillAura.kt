@@ -164,10 +164,10 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
 
     /**
      * Maximum number of distinct enemies to attack in a single tick when
-     * MultiTarget is enabled. Default 10 (strong but believable).
-     * Interpolated up to 20 by RageIntensity slider.
+     * MultiTarget is enabled. Default 20 = max crowd clear.
+     * Interpolated up to 20 by RageIntensity slider (stays 20 at 100%).
      */
-    private val multiTargetMaxPerTick by int("MultiTargetMaxPerTick", 10, 1..50, "targets")
+    private val multiTargetMaxPerTick by int("MultiTargetMaxPerTick", 20, 1..50, "targets")
 
     /**
      * Cooldown (in ticks) between attacks on the SAME enemy when multi-target
