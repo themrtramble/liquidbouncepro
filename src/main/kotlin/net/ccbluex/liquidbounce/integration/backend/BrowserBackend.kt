@@ -29,13 +29,18 @@ import net.ccbluex.liquidbounce.integration.task.TaskManager
 
 /**
  * The browser interface which is used to create tabs and manage the browser backend.
- * Due to different possible browser backends, this interface is used to abstract the browser backend.
+ * Due to different possible backends, this interface is used to abstract the browser backend.
+ *
+ * NOTE: `accelerationFlags` was removed from this interface because the bundled
+ * `liquidbounce-cef` addon JAR (1.0.0+26.3-SNAPSHOT) was compiled against an older
+ * version of this interface that did not have this field. Keeping it makes CEF fail
+ * with AbstractMethodError on every BrowserReadyEvent / ScreenEvent. The MixinMinecraft
+ * title-accelerated-paint block has also been removed.
  */
 @AddonApi
 interface BrowserBackend {
 
     val isInitialized: Boolean
-    var accelerationFlags: BrowserAccelerationFlags
     val browsers: List<Browser>
 
     /**

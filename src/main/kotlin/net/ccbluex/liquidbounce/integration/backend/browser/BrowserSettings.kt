@@ -27,7 +27,6 @@ import net.ccbluex.liquidbounce.event.EventListener
 import net.ccbluex.liquidbounce.event.events.BrowserReadyEvent
 import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.features.addon.AddonApi
-import net.ccbluex.liquidbounce.integration.backend.BrowserAccelerationFlags
 import net.ccbluex.liquidbounce.integration.backend.BrowserBackendManager
 import net.ccbluex.liquidbounce.integration.backend.BrowserBackendManager.backend
 import net.ccbluex.liquidbounce.integration.backend.BrowserBackendProvider
@@ -75,20 +74,10 @@ object GlobalBrowserSettings : ValueGroup("GuiRenderer"), EventListener {
 
     @Suppress("unused")
     private val browserReadyHandler = handler<BrowserReadyEvent> { event ->
-        val accelerationFlags = backend?.accelerationFlags ?: BrowserAccelerationFlags.UNSUPPORTED
-
-        if (!isBrowserAccelerationDisabled && accelerationFlags.isSupported) {
-            accelerated = if (accelerationFlags.isBeta) {
-                boolean("AcceleratedPaint(BETA)", false)
-            } else {
-                boolean("AcceleratedPaint", true)
-            }.onChanged {
-                mc.execute {
-                    ScreenManager.restart()
-                    mc.updateTitle()
-                }
-            }
-        }
+        // Acceleration flags were removed from the BrowserBackend interface because
+        // the bundled liquidbounce-cef addon was compiled against an older version
+        // of the interface and crashed with AbstractMethodError when calling
+        // getAccelerationFlags(). Disable the accelerated paint feature entirely.
     }
 
 }
