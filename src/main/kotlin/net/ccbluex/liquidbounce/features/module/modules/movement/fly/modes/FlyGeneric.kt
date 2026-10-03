@@ -52,13 +52,13 @@ internal object FlyVanilla : Mode("Vanilla") {
     private val bypassVanillaCheck by boolean("BypassVanillaCheck", true)
 
     object BaseSpeed : ValueGroup("BaseSpeed") {
-        val horizontalSpeed by float("Horizontal", 0.44f, 0.1f..10f)
-        val verticalSpeed by float("Vertical", 0.44f, 0.1f..10f)
+        val horizontalSpeed by float("Horizontal", 1.0f, 0.1f..10f)
+        val verticalSpeed by float("Vertical", 1.0f, 0.1f..10f)
     }
 
     object SprintSpeed : ToggleableValueGroup(this, "SprintSpeed", true) {
-        val horizontalSpeed by float("Horizontal", 1f, 0.1f..10f)
-        val verticalSpeed by float("Vertical", 1f, 0.1f..10f)
+        val horizontalSpeed by float("Horizontal", 2.0f, 0.1f..10f)
+        val verticalSpeed by float("Vertical", 2.0f, 0.1f..10f)
     }
 
     init {
@@ -69,6 +69,25 @@ internal object FlyVanilla : Mode("Vanilla") {
     override val parent: ModeValueGroup<*>
         get() = ModuleFly.modes
 
+    /**
+     * Pro fork: packet-based anti-cheat bypass (same approach as FlyCreative).
+     *
+     * Every 40 ticks (2 seconds), if the player is mid-air with no block directly
+     * below within 0.55 blocks, we send a fake "I'm on ground" position packet so
+     * the server's vanilla anti-fly check does not flag us for hovering.
+     *
+     * This is much more reliable than the old `waitTicks(1) + deltaMovement.y = -0.04`
+     * approach which suspended our tickHandler for 2 ticks and broke the fly.
+     */
+    private fun shouldFlyDown(): Boolean {
+        if (!bypassVanillaCheck) return false
+        if (player.tickCount % 40 != 0) return false
+        // If a block is right below the player, no need to spoof — server will see us
+        // standing on it anyway.
+        if (world.getBlockStates(player.boundingBox.move(0.0, -0.55, 0.0)).anyMatch { !it.isAir }) return false
+        return true
+    }
+
     @Suppress("unused")
     private val tickHandler = tickHandler {
         val useSprintSpeed = mc.options.keySprint.isDown && SprintSpeed.enabled
@@ -77,28 +96,45 @@ internal object FlyVanilla : Mode("Vanilla") {
         val vSpeed =
             if (useSprintSpeed) SprintSpeed.verticalSpeed else BaseSpeed.verticalSpeed
 
-        // Pro fork: enable vanilla flying physics so gravity does NOT pull the player
-        // down after this tick handler runs. Without this, setting deltaMovement.y = 0
-        // (glide default) gets overridden by vanilla gravity, causing the player to
-        // fall instead of hover. This is the same approach FlyCreative uses.
+        // Pro fork: FORCE both flying flags every tick. Vanilla physics can reset
+        // `flying` in survival mode (e.g. when landing on ground) and reset
+        // `mayfly` if the server sends an abilities packet. Re-setting them
+        // every tick guarantees the player stays in flight mode.
+        player.abilities.mayfly = true
         player.abilities.flying = true
-        // Reset fall distance every tick so disabling fly mid-air does not kill the
-        // player with accumulated fall damage.
+        player.abilities.flyingSpeed = hSpeed
         player.fallDistance = 0.0
 
-        player.deltaMovement = player.deltaMovement.withStrafe(speed = hSpeed.toDouble())
-        player.deltaMovement.y = when {
+        // Manual vertical control. Vanilla flying uses jump/shift keys but with
+        // a very slow vertical speed (~0.05). Override only when keys pressed so
+        // the player gets the configured vSpeed.
+        val dy = when {
             mc.options.keyJump.isDown && !mc.options.keyShift.isDown -> vSpeed.toDouble()
             mc.options.keyShift.isDown && !mc.options.keyJump.isDown -> (-vSpeed).toDouble()
             else -> glide.toDouble()
         }
 
-        // Most basic bypass for vanilla fly check
-        // This can also be done via packets, but this is easier.
-        if (bypassVanillaCheck && player.tickCount % 40 == 0) {
-            waitTicks(1)
-            player.deltaMovement.y = -0.04
-            waitTicks(1)
+        // Horizontal strafe + vertical override in one shot
+        player.deltaMovement = player.deltaMovement.withStrafe(speed = hSpeed.toDouble())
+        player.deltaMovement = Vec3(player.deltaMovement.x, dy, player.deltaMovement.z)
+
+        // Anti-cheat bypass: send a fake "on ground" position packet every 40 ticks
+        // so the server does not flag us for hovering (vanilla anti-fly check).
+        if (shouldFlyDown()) {
+            network.send(MovePacketType.POSITION_AND_ON_GROUND.generatePacket())
+        }
+    }
+
+    /**
+     * Pro fork: when bypassing the vanilla fly check, also rewrite the y-coordinate
+     * of any outgoing position packet so the server thinks we are 0.04 blocks
+     * below our actual position (mimicking a tiny fall). This is what the vanilla
+     * anti-cheat expects from a "non-flying" player and prevents rollback.
+     */
+    @Suppress("unused")
+    private val packetHandler = handler<PacketEvent> { event ->
+        if (shouldFlyDown() && event.packet is ServerboundMovePlayerPacket) {
+            event.packet.y = player.yLast - 0.04
         }
     }
 
