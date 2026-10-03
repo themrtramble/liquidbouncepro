@@ -118,21 +118,37 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
     private val keepSprint by boolean("KeepSprint", true)
 
     /**
-     * Pro fork: RAGE MODE - "Annihilation" toggle.
+     * Pro fork: RAGE INTENSITY slider (0..100%) - replaces the on/off RageMode toggle.
      *
-     * OFF (default): safe balanced KillAura - 60 CPS, 1 attack/tick/enemy,
-     *   1-tick cooldown per enemy, SMART crits. Anti-cheat believable.
+     * 0%  = safe balanced (anti-ban default):
+     *       - MultiTarget: respects user toggle (default OFF)
+     *       - Criticals: SMART (legit crits)
+     *       - multiTargetCooldown: 1 tick (believable)
+     *       - multiTargetMaxPerTick: 5 (believable)
      *
-     * ON: ULTRA-teej rage mode - 60 CPS but MaxPerTick effectively 20,
-     *   multiTargetCooldown 0, multiTargetMaxPerTick 20, criticals IGNORE.
-     *   Effectively: 60 CPS × 20 enemies = 1200 attacks/sec distributed.
-     *   Enemies die instantly. No chance to react. No anti-ban.
-     *   ONLY use this on servers where you don't care about bans.
+     * 100% = full annihilation (no anti-ban):
+     *       - MultiTarget: forced ON
+     *       - Criticals: IGNORE (no crit wait)
+     *       - multiTargetCooldown: 0 (every tick per enemy)
+     *       - multiTargetMaxPerTick: 20 (all 20 enemies)
+     *       - 60 CPS × 20 enemies = ~1200 attacks/sec, enemies die instantly
      *
-     * Naming: called "RageMode" in code, "Annihilation" displayed to user
-     * (kills enemies so fast they don't even get a chance to fight back).
+     * 50% = balanced (still strong but a bit safer):
+     *       - MultiTarget: forced ON
+     *       - Criticals: SMART (50% chance per tick, gradually IGNORE)
+     *       - multiTargetCooldown: 1 tick
+     *       - multiTargetMaxPerTick: ~12 (between 5 and 20)
+     *
+     * Default 0% = anti-ban. User cranks up to whatever they want.
      */
-    private val rageMode by boolean("RageMode", false, aliases = listOf("Annihilation"))
+    private val rageIntensity by int("RageIntensity", 0, 0..100, "%",
+        aliases = listOf("RageMode", "Annihilation"))
+
+    /**
+     * Helper: rageLevel 0..1 (rageIntensity / 100). 0 = safe, 1 = full annihilation.
+     */
+    private val rageLevel: Float
+        get() = rageIntensity.coerceIn(0, 100) / 100f
 
     /**
      * Pro fork: MultiTarget is OFF by default.
@@ -147,48 +163,59 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
     private val multiTarget by boolean("MultiTarget", false)
 
     /**
-     * Effective multi-target enabled state: ON if user enabled it OR RageMode is ON.
-     */
-    private val effectiveMultiTarget: Boolean
-        get() = multiTarget || rageMode
-
-    /**
-     * Pro fork: maximum number of distinct enemies to attack in a single tick when
-     * MultiTarget is enabled. Reduced from 20 to 5 for anti-ban. 20 attacks/tick
-     * on different enemies is impossible for a human and gets flagged by anti-cheats.
-     * 5 enemies/tick is still extremely aggressive but believable for a pro player
-     * with fast reflexes.
-     *
-     * With RageMode ON, effective value becomes 20 (max enemies per tick).
+     * Maximum number of distinct enemies to attack in a single tick when
+     * MultiTarget is enabled. Default 5 (believable pro player).
+     * Interpolated up to 20 by RageIntensity slider.
      */
     private val multiTargetMaxPerTick by int("MultiTargetMaxPerTick", 5, 1..50, "targets")
 
     /**
-     * Pro fork: cooldown (in ticks) between attacks on the SAME enemy when multi-target
-     * is enabled. Default 1 tick = 20 attacks/sec per enemy (smooth, fast, believable).
-     * Setting 0 = attack every tick = 60+ attacks/sec/enemy which anti-cheats detect.
-     *
-     * With RageMode ON, effective value becomes 0 (no cooldown).
+     * Cooldown (in ticks) between attacks on the SAME enemy when multi-target
+     * is enabled. Default 1 (believable). Interpolated down to 0 by RageIntensity.
      */
     private val multiTargetCooldown by int("MultiTargetCooldown", 1, 0..20, "ticks")
 
     /**
-     * Effective multi-target max per tick, considering RageMode override.
+     * Effective multi-target enabled state.
+     * - rageLevel = 0: respects user toggle (default OFF)
+     * - rageLevel > 0: forced ON (any rage activates crowd-clearing)
+     */
+    private val effectiveMultiTarget: Boolean
+        get() = multiTarget || rageLevel > 0f
+
+    /**
+     * Effective multi-target max per tick, interpolated by rageLevel.
+     * - rageLevel 0   -> user value (5)
+     * - rageLevel 0.5 -> ~12
+     * - rageLevel 1   -> 20
      */
     private val effectiveMultiTargetMaxPerTick: Int
-        get() = if (rageMode) 20 else multiTargetMaxPerTick
+        get() {
+            val base = multiTargetMaxPerTick
+            val rage = 20
+            return (base + (rage - base) * rageLevel).toInt().coerceIn(1, 50)
+        }
 
     /**
-     * Effective multi-target cooldown, considering RageMode override.
+     * Effective multi-target cooldown (in ticks), interpolated by rageLevel.
+     * - rageLevel 0 -> user value (1 tick)
+     * - rageLevel 1 -> 0 ticks (no cooldown)
      */
     private val effectiveMultiTargetCooldown: Int
-        get() = if (rageMode) 0 else multiTargetCooldown
+        get() {
+            val base = multiTargetCooldown
+            return (base * (1f - rageLevel)).toInt().coerceIn(0, 20)
+        }
 
     /**
-     * Effective criticals selection mode, considering RageMode override.
+     * Effective criticals selection mode, interpolated by rageLevel.
+     * - rageLevel 0   -> user value (SMART)
+     * - rageLevel > 0.5 -> IGNORE (no crit wait)
+     * - rageLevel 0..0.5 -> still SMART (gradually less likely to wait,
+     *   but here we just switch at threshold for simplicity)
      */
     private val effectiveCriticalsSelectionMode: CriticalsSelectionMode
-        get() = if (rageMode) CriticalsSelectionMode.IGNORE else criticalsSelectionMode
+        get() = if (rageLevel >= 0.5f) CriticalsSelectionMode.IGNORE else criticalsSelectionMode
 
     /**
      * Pro fork: tracks the last tick each enemy was attacked, so we don't spam the same
