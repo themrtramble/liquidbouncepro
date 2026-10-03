@@ -164,16 +164,17 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
 
     /**
      * Maximum number of distinct enemies to attack in a single tick when
-     * MultiTarget is enabled. Default 5 (believable pro player).
+     * MultiTarget is enabled. Default 10 (strong but believable).
      * Interpolated up to 20 by RageIntensity slider.
      */
-    private val multiTargetMaxPerTick by int("MultiTargetMaxPerTick", 5, 1..50, "targets")
+    private val multiTargetMaxPerTick by int("MultiTargetMaxPerTick", 10, 1..50, "targets")
 
     /**
      * Cooldown (in ticks) between attacks on the SAME enemy when multi-target
-     * is enabled. Default 1 (believable). Interpolated down to 0 by RageIntensity.
+     * is enabled. Default 0 = attack every tick (max 60 hits/sec per enemy).
+     * Interpolated down to 0 by RageIntensity (already 0 at 0%).
      */
-    private val multiTargetCooldown by int("MultiTargetCooldown", 1, 0..20, "ticks")
+    private val multiTargetCooldown by int("MultiTargetCooldown", 0, 0..20, "ticks")
 
     /**
      * Effective multi-target enabled state.
@@ -369,9 +370,11 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
                 multiTargetLastAttackTick.entries.removeIf { currentTick - it.value > 200 }
             }
 
-            // Find all attackable enemies in the world (NO range filter — hits everyone)
-            // Apply per-enemy cooldown to prevent spamming the same enemy every tick
-            // SAFETY: NEVER attack friends — explicit FriendManager check
+            // Find all attackable enemies within KillAura range.
+            // Apply per-enemy cooldown to prevent spamming the same enemy every tick.
+            // SAFETY: NEVER attack friends — explicit FriendManager check.
+            // Sort by distance so we hit closest enemies first (more reliable hit-test).
+            val maxRangeSq = range.interactionRange.sq()
             val candidates = world.entitiesForRendering()
                 .filterIsInstance<LivingEntity>()
                 .filter { entity ->
@@ -381,15 +384,23 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
                         entity !in alreadyAttacked &&
                         // Pro fork: NEVER attack friends, regardless of GlobalSettings
                         !FriendManager.isFriend(entity) &&
-                        // Per-enemy cooldown check (effective = 0 when RageMode ON)
+                        // Range check — only attack enemies within KillAura interactionRange
+                        player.squaredBoxedDistanceTo(entity) <= maxRangeSq &&
+                        // Per-enemy cooldown check (effective = 0 when RageIntensity > 0)
                         (multiTargetLastAttackTick[entity.id]?.let {
                             currentTick - it >= effectiveMultiTargetCooldown
                         } ?: true)
                 }
+                .sortedBy { player.squaredBoxedDistanceTo(it) }
                 .take(effectiveMultiTargetMaxPerTick - 1)
 
             for (extra in candidates) {
                 if (CombatManager.shouldPauseCombat) break
+
+                // Pro fork: also check canAttackNow for extras so we don't waste
+                // attack packets when item is on cooldown, inventory is open, or
+                // critical hit is not yet possible. Matches primary target behavior.
+                if (!canAttackNow(extra, player.mainHandItem)) continue
 
                 // SIMPLE rotation — no raytrace overhead (findRotation is expensive)
                 // Just look at the enemy's eye position directly
