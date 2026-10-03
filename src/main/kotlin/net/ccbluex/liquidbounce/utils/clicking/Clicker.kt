@@ -50,7 +50,7 @@ open class Clicker<T>(
     val parent: T,
     val keyBinding: KeyMapping,
     val itemCooldown: ItemCooldown? = ItemCooldown(),
-    maxCps: Int = 1000,
+    maxCps: Int = 5000,
     name: String = "Clicker",
     simulateAttackKeyDown: Boolean = false,
 ) : ValueGroup(name, aliases = listOf("ClickScheduler")), EventListener where T : EventListener {
@@ -61,17 +61,16 @@ open class Clicker<T>(
 
     private val technique by enumChoice("Technique", ClickTechnique.HUMAN)
     /**
-     * Pro fork: default CPS buffed to 200..500 (was 60..100, originally 11..14 in
-     * vanilla) for ULTRA-fast attacks. Range cap raised to 1000 cps so aggressive
-     * users can push to the absolute limit (server-side anti-cheat tolerance dependent).
+     * Pro fork: default CPS buffed to 500..1000 (was 200..500) for ULTRA-fast attacks.
+     * Range cap raised to 5000 cps - server anti-cheat tolerance dependent.
      */
-    private val cps by intRange("CPS", 200..500, 1..maxCps, "clicks")
+    private val cps by intRange("CPS", 500..1000, 1..maxCps, "clicks")
     /**
-     * Pro fork: default max-per-tick raised from 5 to 50. Combined with CPS 200..500
-     * and no cooldown, this allows multiple attacks per tick — effectively the
-     * fastest attack rate the client is capable of producing.
+     * Pro fork: default max-per-tick raised from 5 to 20 (4x boost). Combined
+     * with CPS 500..1000, this enables up to 20 attacks per tick per enemy -
+     * effectively the fastest attack rate the client is capable of producing.
      */
-    private val maxPerTick by int("MaxPerTick", 5, 1..50, "clicks")
+    private val maxPerTick by int("MaxPerTick", 20, 1..50, "clicks")
 
     init {
         itemCooldown?.let(this::tree)
