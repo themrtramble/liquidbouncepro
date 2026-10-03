@@ -215,6 +215,9 @@ public abstract class MixinMinecraft {
             }
         }
 
+        // Fire WindowTitleEvent so addons (like liquidbounce-cef) can react to title changes.
+        EventManager.INSTANCE.callEvent(new WindowTitleEvent(titleBuilder));
+
         ClientPacketListener clientPlayNetworkHandler = this.getConnection();
         if (clientPlayNetworkHandler != null && clientPlayNetworkHandler.getConnection().isConnected()) {
             titleBuilder.append(" - ");

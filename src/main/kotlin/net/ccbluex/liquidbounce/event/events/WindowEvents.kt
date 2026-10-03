@@ -80,3 +80,7 @@ class KeyboardKeyEvent(
 
 @Tag("keyboardChar")
 class KeyboardCharEvent(val codePoint: Int) : Event(), WebSocketEvent
+
+@AddonApi
+@Tag("windowTitle")
+class WindowTitleEvent(val title: StringBuilder) : Event()
