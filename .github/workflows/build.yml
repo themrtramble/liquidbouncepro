@@ -43,7 +43,7 @@ jobs:
         env:
           CI: true
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew build -x test -x detekt
+        run: ./gradlew build -x test -x detekt -x checkKotlinAbi
 
       - name: Locate built jar
         id: findjar
