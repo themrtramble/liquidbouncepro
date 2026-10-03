@@ -50,7 +50,7 @@ open class Clicker<T>(
     val parent: T,
     val keyBinding: KeyMapping,
     val itemCooldown: ItemCooldown? = ItemCooldown(),
-    maxCps: Int = 1000,
+    maxCps: Int = 60,
     name: String = "Clicker",
     simulateAttackKeyDown: Boolean = false,
 ) : ValueGroup(name, aliases = listOf("ClickScheduler")), EventListener where T : EventListener {
@@ -61,16 +61,15 @@ open class Clicker<T>(
 
     private val technique by enumChoice("Technique", ClickTechnique.HUMAN)
     /**
-     * Pro fork: CPS capped at 60 (was 200..500). Server-side anti-cheats
-     * flag 100+ CPS as bot. 60 CPS is the human-max believable rate while
-     * still being extremely aggressive.
+     * Pro fork: CPS hard-capped at 60. Slider cannot exceed 60.
+     * Default 55..60 = max aggressive but anti-cheat believable.
+     * 60 CPS = max humanly possible click rate, no anti-cheat flags it.
      */
     private val cps by intRange("CPS", 55..60, 1..maxCps, "clicks")
     /**
-     * Pro fork: MaxPerTick default 1 = single attack per tick per enemy.
-     * This matches legitimate player behavior (one click per tick max).
-     * Combined with CPS 55..60, the clicker fires once per tick ~60 times
-     * per second - exactly what a fast clicker would produce.
+     * Pro fork: MaxPerTick default 1 = one attack per tick per enemy.
+     * At 60 CPS this means one click per tick = max speed possible
+     * while looking like a fast human clicker.
      */
     private val maxPerTick by int("MaxPerTick", 1, 1..50, "clicks")
 
