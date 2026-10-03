@@ -18,8 +18,8 @@
  */
 package net.ccbluex.liquidbounce.utils.render
 
+import com.mojang.renderpearl.api.GpuFormat
 import com.mojang.renderpearl.api.device.GpuDevice
-import com.mojang.renderpearl.api.textures.GpuFormat
 import com.mojang.renderpearl.api.textures.GpuTexture
 import com.mojang.renderpearl.api.textures.GpuTextureView
 import net.ccbluex.liquidbounce.render.engine.type.Color4b
