@@ -26,6 +26,7 @@ import net.ccbluex.liquidbounce.utils.block.state
 import net.ccbluex.liquidbounce.utils.collection.Pools
 import net.ccbluex.liquidbounce.utils.collection.blockSortedSetOf
 import net.ccbluex.liquidbounce.utils.kotlin.addAll
+import net.ccbluex.liquidbounce.utils.render.XRayLightmapHelper
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import net.minecraft.world.level.BlockGetter
@@ -359,6 +360,10 @@ object ModuleXRay : ClientModule("XRay", ModuleCategories.RENDER) {
 
     override fun onDisabled() {
         mc.levelExtractor.allChanged()
+        // Pro fork: release the cached white lightmap texture view so we do not
+        // leak GPU memory across XRay enable/disable cycles. The view will be
+        // recreated on the next enable if needed.
+        XRayLightmapHelper.close()
     }
 
 }

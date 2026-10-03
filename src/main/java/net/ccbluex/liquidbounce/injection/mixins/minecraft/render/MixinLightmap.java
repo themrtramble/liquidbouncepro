@@ -19,6 +19,7 @@
 package net.ccbluex.liquidbounce.injection.mixins.minecraft.render;
 
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.renderpearl.api.textures.GpuTexture;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.ccbluex.liquidbounce.features.module.modules.render.ModuleItemChams;
@@ -49,28 +50,32 @@ public abstract class MixinLightmap {
         at = @At("RETURN")
     )
     private GpuTextureView lightmapOverride(GpuTextureView original) {
+        // Pro fork: when XRay+FullBright is active, fully replace the lightmap
+        // texture view with our own all-white 16x16 texture. This is the most
+        // bulletproof approach because:
+        //   - shaders ALWAYS sample via Lightmap#getTextureView
+        //   - we control what texture they sample from
+        //   - we do not depend on the vanilla Lightmap#render method being
+        //     called or its dirty flag being set
+        //   - it works on both vanilla and Sodium paths
+        ModuleXRay module = ModuleXRay.INSTANCE;
+        if (module.getRunning() && module.getFullBright()) {
+            return XRayLightmapHelper.getWhiteTextureView(RenderSystem.getDevice());
+        }
+
+        // Existing ItemChams lightmap override takes precedence over
+        // CustomAmbience (which only edits the texture, not the view).
         return ModuleItemChams.Lightmap.OVERRIDE.orElse(original);
     }
 
     /**
-     * Pro fork: When XRay + FullBright are both active, force the entire lightmap
-     * texture to pure white. Every fragment shader that samples the lightmap
-     * (vanilla ModelBlockRenderer and Sodium BlockRenderer alike) will then receive
-     * full-bright lighting, regardless of the per-vertex light coords the chunk
-     * builder baked into the geometry. This is the only reliable way to brighten
-     * ores in pitch-black caves where block light = 0 AND sky light = 0.
+     * Pro fork: When XRay+FullBright is active, also clear the existing lightmap
+     * texture to white as a backup of the texture-view override above. This is
+     * belt-and-braces: if any code path reads the texture directly (not via
+     * getTextureView), it still sees white.
      *
-     * <p>Previous attempts that tried to set per-vertex light coords on
-     * {@link com.mojang.blaze3d.vertex.QuadInstance} failed because the setter
-     * method name differs across MC 26.x patch versions and reflection silently
-     * missed it. Clearing the lightmap texture is version-tolerant because the
-     * lightmap is always a 16x16 GpuTexture that the shader samples with linear
-     * filtering - clear to white and every sample returns white.</p>
-     *
-     * <p>This inject runs at the first {@code needsUpdate} field read inside
-     * {@link Lightmap#render}, so we get a chance every frame to (re)apply the
-     * white clear. We {@code cancel()} so the vanilla lightmap computation
-     * (which would write the cave-dark values back) is skipped entirely.</p>
+     * <p>Falls through to the CustomAmbience lightmap path when XRay is not
+     * active, preserving the original behavior.</p>
      */
     @Inject(
         method = "render(Lnet/minecraft/client/renderer/state/LightmapRenderState;)V",
