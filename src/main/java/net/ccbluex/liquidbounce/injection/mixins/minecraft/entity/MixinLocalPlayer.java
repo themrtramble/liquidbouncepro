@@ -363,9 +363,24 @@ public abstract class MixinLocalPlayer extends MixinPlayer implements LocalPlaye
     }
 
     // Silent rotations (Rotation Manager)
+    // IMPORTANT: Only hook sendPosition (network packet method) — NOT tick().
+    //
+    // LocalPlayer.tick() reads getYRot()/getXRot() many times for:
+    // - walk direction / strafe input rotation (moveRelative)
+    // - camera/visual rotation
+    // - food/swim/eye-height logic
+    //
+    // If we override these inside tick(), the player's movement code sees the
+    // server-side rotation target instead of the real client rotation, which
+    // completely breaks walking direction, strafing and jumping — the player
+    // feels frozen because the client thinks it's facing a different way than
+    // the user is actually pressing.
+    //
+    // sendPosition() is the method that builds the outgoing move packet, so
+    // hooking only there sends the server-side rotation target to the server
+    // while keeping the client-side movement fully functional.
 
-    @ModifyExpressionValue(method = {"sendPosition",
-        "tick"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;getYRot()F"))
+    @ModifyExpressionValue(method = "sendPosition", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;getYRot()F"))
     private float hookSilentRotationYaw(float original) {
         Rotation rotation = RotationManager.INSTANCE.getCurrentRotation();
         if (rotation == null) {
@@ -375,8 +390,7 @@ public abstract class MixinLocalPlayer extends MixinPlayer implements LocalPlaye
         return rotation.yRot();
     }
 
-    @ModifyExpressionValue(method = {"sendPosition",
-        "tick"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;getXRot()F"))
+    @ModifyExpressionValue(method = "sendPosition", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;getXRot()F"))
     private float hookSilentRotationPitch(float original) {
         Rotation rotation = RotationManager.INSTANCE.getCurrentRotation();
         if (rotation == null) {
