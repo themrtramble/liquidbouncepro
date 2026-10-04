@@ -41,12 +41,17 @@ import net.ccbluex.liquidbounce.utils.kotlin.EventPriorityConvention.CRITICAL_MO
 import net.ccbluex.liquidbounce.utils.kotlin.Priority
 
 /**
- * Sprint module
+ * Sprint module (alias: KeepSprint)
  *
- * Sprints automatically.
+ * Pro fork: Sprints automatically whenever the player is moving in any
+ * direction - walking forward, strafing, walking in air, walking while
+ * using an item, walking while hurt. Any movement input triggers sprint.
+ *
+ * Default state: OFF (user enables manually when they want it).
+ * Once enabled, sprint is maintained across all movement states.
  */
 
-object ModuleSprint : ClientModule("Sprint", ModuleCategories.MOVEMENT) {
+object ModuleSprint : ClientModule("Sprint", ModuleCategories.MOVEMENT, aliases = listOf("KeepSprint")) {
 
     private enum class SprintMode(override val tag: String) : Tagged {
         LEGIT("Legit"),
@@ -83,18 +88,19 @@ object ModuleSprint : ClientModule("Sprint", ModuleCategories.MOVEMENT) {
             return@handler
         }
 
-        if (event.source == SprintEvent.Source.MOVEMENT_TICK || event.source == SprintEvent.Source.INPUT) {
-            event.sprint = true
-        }
+        // Pro fork: ALWAYS sprint when moving, regardless of source.
+        // Removed the MOVEMENT_TICK/INPUT source check so sprint is forced
+        // on every SprintEvent (movement tick, input, network) - this
+        // matches the user's 'kahin bhi chale to KeepSprint kare' request.
+        event.sprint = true
     }
 
     @Suppress("unused")
     private val sprintPreventionHandler = handler<SprintEvent> { event ->
-        // In this case we want to prevent sprinting on movement tick only,
-        // because otherwise you could guess from the input change that this is automated.
-        if (event.source == SprintEvent.Source.MOVEMENT_TICK && shouldPreventSprint()) {
-            event.sprint = false
-        }
+        // Pro fork: NEVER prevent sprint. The original shouldPreventSprint()
+        // checked for using-item, sneaking, ground/air, no forward movement,
+        // etc. and turned sprint off. User wants KeepSprint to ALWAYS
+        // keep sprinting when moving - so this handler is now a no-op.
     }
 
     @Suppress("unused")
