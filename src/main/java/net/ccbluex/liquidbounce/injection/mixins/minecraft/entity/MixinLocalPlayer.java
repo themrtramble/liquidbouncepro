@@ -464,32 +464,23 @@ public abstract class MixinLocalPlayer extends MixinPlayer implements LocalPlaye
 
     @ModifyExpressionValue(method = "canStartSprinting", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/ClientInput;hasForwardImpulse()Z"))
     private boolean hookIsWalking(boolean original) {
-        // Pro fork: When Sprint module is enabled, treat ANY directional
-        // input as 'is walking' so sprint can start in any direction
-        // (forward, backward, strafe, diagonal). This matches user's
-        // 'kahin bhi chale to KeepSprint kare' request.
-        if (!ModuleSprint.INSTANCE.getRunning()) {
+        // Pro fork: vanilla only allows sprinting when moving forward.
+        // When Sprint module is running in OMNIDIRECTIONAL mode, allow
+        // sprint in any direction by treating any movement input as
+        // 'is walking'. LEGIT mode keeps vanilla forward-only behavior
+        // so the player feels normal movement.
+        if (!ModuleSprint.INSTANCE.getRunning() ||
+            !ModuleSprint.INSTANCE.getShouldSprintOmnidirectional()) {
             return original;
         }
 
-        // Omnidirectional mode: keep original omni logic
-        if (ModuleSprint.INSTANCE.getShouldSprintOmnidirectional()) {
-            float movementForward = input.getMoveVector().y;
-            float movementSideways = input.getMoveVector().x;
-            var hasMovement = Math.abs(movementForward) > 1.0E-5F ||
-                    Math.abs(movementSideways) > 1.0E-5F;
-            var isWalking = (double) Math.abs(movementForward) >= 0.8 ||
-                    (double) Math.abs(movementSideways) >= 0.8;
-            return this.isUnderWater() ? hasMovement : isWalking;
-        }
-
-        // LEGIT mode but module enabled: any movement input counts as walking
-        // so sprint can start in any direction, not just forward.
         float movementForward = input.getMoveVector().y;
         float movementSideways = input.getMoveVector().x;
         var hasMovement = Math.abs(movementForward) > 1.0E-5F ||
                 Math.abs(movementSideways) > 1.0E-5F;
-        return this.isUnderWater() ? hasMovement : hasMovement;
+        var isWalking = (double) Math.abs(movementForward) >= 0.8 ||
+                (double) Math.abs(movementSideways) >= 0.8;
+        return this.isUnderWater() ? hasMovement : isWalking;
     }
 
     @ModifyExpressionValue(method = "sendIsSprintingIfNeeded", at = @At(

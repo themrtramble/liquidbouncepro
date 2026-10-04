@@ -303,9 +303,12 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
                 multiTargetLastAttackTick.entries.removeIf { currentTick - it.value > 200 }
             }
 
-            // Find all attackable enemies in the world (NO range filter — hits everyone)
-            // Apply per-enemy cooldown to prevent spamming the same enemy every tick
-            // SAFETY: NEVER attack friends — explicit FriendManager check
+            // Find all attackable enemies within KillAura interaction range.
+            // Apply per-enemy cooldown to prevent spamming the same enemy every tick.
+            // SAFETY: NEVER attack friends — explicit FriendManager check.
+            // Range check is critical for performance — without it we scan
+            // every LivingEntity in render distance (50+ chunks worth).
+            val maxRangeSq = range.interactionRange.sq()
             val candidates = world.entitiesForRendering()
                 .filterIsInstance<LivingEntity>()
                 .filter { entity ->
@@ -315,15 +318,25 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
                         entity !in alreadyAttacked &&
                         // Pro fork: NEVER attack friends, regardless of GlobalSettings
                         !FriendManager.isFriend(entity) &&
+                        // Range check — only attack enemies within KillAura range
+                        player.squaredBoxedDistanceTo(entity) <= maxRangeSq &&
                         // Per-enemy cooldown check
                         (multiTargetLastAttackTick[entity.id]?.let {
                             currentTick - it >= multiTargetCooldown
                         } ?: true)
                 }
+                // Sort by distance so closest enemies are attacked first
+                // (more reliable hit-test, less wasted attacks on far enemies)
+                .sortedBy { player.squaredBoxedDistanceTo(it) }
                 .take(multiTargetMaxPerTick - 1)
 
             for ((index, extra) in candidates.withIndex()) {
                 if (CombatManager.shouldPauseCombat) break
+
+                // Pro fork: also check canAttackNow for extras so we don't waste
+                // attack packets when item is on cooldown, inventory is open, or
+                // critical hit is not yet possible. Matches primary target behavior.
+                if (!canAttackNow(extra, player.mainHandItem)) continue
 
                 // SIMPLE rotation — no raytrace overhead (findRotation is expensive)
                 // Just look at the enemy's eye position directly
@@ -366,8 +379,13 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
 
     @Suppress("unused")
     private val sprintHandler = handler<SprintEvent> { event ->
-        if (shouldBlockSprinting && (event.source == SprintEvent.Source.MOVEMENT_TICK ||
-                event.source == SprintEvent.Source.INPUT)) {
+        // Pro fork: Only block sprint for NETWORK source (server-visible state)
+        // so vanilla crit check on server side sees us as non-sprinting.
+        // Do NOT block on MOVEMENT_TICK or INPUT - those would kill the
+        // client-side forward momentum and make the player feel stuck in
+        // air when jumping to land a crit. Player keeps full movement
+        // freedom; only the server-side sprint flag is gated.
+        if (shouldBlockSprinting && event.source == SprintEvent.Source.NETWORK) {
             event.sprint = false
         }
     }

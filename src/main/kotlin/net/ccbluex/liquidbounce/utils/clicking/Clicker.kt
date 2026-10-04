@@ -61,13 +61,13 @@ open class Clicker<T>(
 
     private val technique by enumChoice("Technique", ClickTechnique.HUMAN)
     /**
-     * Pro fork: default CPS 5000..7000 (MAX ULTRA-fast). maxCps cap = 10000.
-     * User can crank slider up to 10000 CPS in ClickGUI if server allows.
-     * With Criticals=SMART, crits still land on fall while attack rate
-     * stays extremely high. Anti-ban via Criticals SMART (legit crit
-     * pattern) + MultiTargetCooldown 1 tick (believable per-enemy rate).
+     * Pro fork: default CPS 1500..2500 (ULTRA-fast but stable). maxCps cap = 10000.
+     * Higher CPS (5000+) causes client-side tick instability and packet flood.
+     * 1500..2500 is the sweet spot: extremely fast but won't destabilize the
+     * client or saturate the network. Anti-ban via Criticals SMART (legit
+     * crit pattern) + MultiTargetCooldown 1 tick (believable per-enemy rate).
      */
-    private val cps by intRange("CPS", 5000..7000, 1..maxCps, "clicks")
+    private val cps by intRange("CPS", 1500..2500, 1..maxCps, "clicks")
     /**
      * Pro fork: MaxPerTick default 20 = max 20 attacks per tick per enemy.
      * Combined with CPS 800..2000, this enables extremely fast attack rates.
