@@ -119,7 +119,7 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
      * Trade-off: ~30% fewer crits in exchange for an uninterrupted attack rate.
      * Set this back to SMART if you prefer guaranteed crits over attack speed.
      */
-    private val criticalsSelectionMode by enumChoice("Criticals", CriticalsSelectionMode.IGNORE)
+    private val criticalsSelectionMode by enumChoice("Criticals", CriticalsSelectionMode.SMART)
     private val keepSprint by boolean("KeepSprint", true)
 
     /**

@@ -50,7 +50,7 @@ open class Clicker<T>(
     val parent: T,
     val keyBinding: KeyMapping,
     val itemCooldown: ItemCooldown? = ItemCooldown(),
-    maxCps: Int = 5000,
+    maxCps: Int = 10000,
     name: String = "Clicker",
     simulateAttackKeyDown: Boolean = false,
 ) : ValueGroup(name, aliases = listOf("ClickScheduler")), EventListener where T : EventListener {
@@ -61,13 +61,15 @@ open class Clicker<T>(
 
     private val technique by enumChoice("Technique", ClickTechnique.HUMAN)
     /**
-     * Pro fork: default CPS 500..1000 (ULTRA-fast). maxCps cap = 5000.
-     * User can crank slider up to 5000 CPS in ClickGUI if server allows.
+     * Pro fork: default CPS 800..2000 (ULTRA-fast). maxCps cap = 10000.
+     * User can crank slider up to 10000 CPS in ClickGUI if server allows.
+     * With Criticals=SMART, crits still land on fall while attack rate
+     * stays extremely high.
      */
-    private val cps by intRange("CPS", 500..1000, 1..maxCps, "clicks")
+    private val cps by intRange("CPS", 800..2000, 1..maxCps, "clicks")
     /**
      * Pro fork: MaxPerTick default 20 = max 20 attacks per tick per enemy.
-     * Combined with CPS 500..1000, this enables extremely fast attack rates.
+     * Combined with CPS 800..2000, this enables extremely fast attack rates.
      */
     private val maxPerTick by int("MaxPerTick", 20, 1..50, "clicks")
 
