@@ -130,7 +130,7 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
      * Combined with the higher MaxPerTick and no-cooldown defaults, this lets the client
      * effectively fight whole crowds at once.
      */
-    private val multiTarget by boolean("MultiTarget", true)
+    private val multiTarget by boolean("MultiTarget", false)
 
     /**
      * Pro fork: maximum number of distinct enemies to attack in a single tick when
