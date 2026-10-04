@@ -40,7 +40,7 @@ import net.minecraft.world.entity.Entity
 @AddonApi
 open class RotationsValueGroup(
     owner: EventListener,
-    movementCorrection: MovementCorrection = MovementCorrection.SILENT,
+    movementCorrection: MovementCorrection = MovementCorrection.OFF,
     combatSpecific: Boolean = false
 ) : ValueGroup("Rotations") {
 
