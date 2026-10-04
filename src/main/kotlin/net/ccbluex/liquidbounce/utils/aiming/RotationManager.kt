@@ -246,10 +246,23 @@ object RotationManager : EventListener {
             if (rotationTarget == null && (activeRotationTarget.movementCorrection == MovementCorrection.CHANGE_LOOK
                     || activeRotationTarget.processors.isEmpty()
                     || diff <= activeRotationTarget.resetThreshold)) {
-                currentRotation?.let { currentRotation ->
-                    player.yRot = player.withFixedYaw(currentRotation)
-                    player.yBob = player.yRot
-                    player.yBobO = player.yRot
+                // Pro fork: Only snap player.yRot when movementCorrection is CHANGE_LOOK.
+                // With OFF (the default), snapping player.yRot during the reset path
+                // breaks client-side movement because the player's walk direction
+                // suddenly changes to the last rotation target. This caused the
+                // 'stuck' feeling when KillAura was enabled — the player's yaw kept
+                // snapping between their real rotation and the KillAura target
+                // every time the clicker schedule changed.
+                //
+                // With OFF, we just clear currentRotation without touching the
+                // player. The server still gets the spoofed rotation via the
+                // sendPosition hook (hookSilentRotationYaw/Pitch).
+                if (activeRotationTarget.movementCorrection == MovementCorrection.CHANGE_LOOK) {
+                    currentRotation?.let { currentRotation ->
+                        player.yRot = player.withFixedYaw(currentRotation)
+                        player.yBob = player.yRot
+                        player.yBobO = player.yRot
+                    }
                 }
 
                 currentRotation = null
