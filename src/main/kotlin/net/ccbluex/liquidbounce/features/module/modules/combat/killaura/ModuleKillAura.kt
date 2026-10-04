@@ -322,7 +322,7 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
                 }
                 .take(multiTargetMaxPerTick - 1)
 
-            for (extra in candidates) {
+            for ((index, extra) in candidates.withIndex()) {
                 if (CombatManager.shouldPauseCombat) break
 
                 // SIMPLE rotation — no raytrace overhead (findRotation is expensive)
@@ -332,14 +332,23 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
                     player.eyePosition
                 ).normalize()
 
-                // Send rotation packet so the server thinks we're aiming at this enemy
-                network.send(
-                    net.minecraft.network.protocol.game.ServerboundMovePlayerPacket.PosRot(
-                        player.x, player.y, player.z,
-                        extraRot.yaw, extraRot.pitch,
-                        player.onGround(), player.horizontalCollision
+                // Pro fork: only send rotation packet for the FIRST extra enemy in the
+                // tick. Sending PosRot for every extra enemy (15 per tick) caused the
+                // server to override the player's rotation 15 times per tick, which
+                // made the player's movement jittery ('jhaat-jhaat lagti' feedback).
+                // Now we set the player's rotation ONCE per tick for the first extra,
+                // and the remaining extras just attack without re-sending rotation -
+                // the server already thinks we're aiming at the first extra's direction,
+                // and since the extras are all nearby, the hit-test still passes.
+                if (index == 0) {
+                    network.send(
+                        net.minecraft.network.protocol.game.ServerboundMovePlayerPacket.PosRot(
+                            player.x, player.y, player.z,
+                            extraRot.yaw, extraRot.pitch,
+                            player.onGround(), player.horizontalCollision
+                        )
                     )
-                )
+                }
 
                 // Direct attack — bypasses clicker scheduler entirely
                 attackEntity(extra, SwingMode.DO_NOT_HIDE, keepSprint && !shouldBlockSprinting)
