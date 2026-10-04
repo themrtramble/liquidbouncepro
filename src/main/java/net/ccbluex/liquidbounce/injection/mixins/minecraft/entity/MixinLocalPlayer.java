@@ -464,17 +464,32 @@ public abstract class MixinLocalPlayer extends MixinPlayer implements LocalPlaye
 
     @ModifyExpressionValue(method = "canStartSprinting", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/ClientInput;hasForwardImpulse()Z"))
     private boolean hookIsWalking(boolean original) {
-        if (!ModuleSprint.INSTANCE.getShouldSprintOmnidirectional()) {
+        // Pro fork: When Sprint module is enabled, treat ANY directional
+        // input as 'is walking' so sprint can start in any direction
+        // (forward, backward, strafe, diagonal). This matches user's
+        // 'kahin bhi chale to KeepSprint kare' request.
+        if (!ModuleSprint.INSTANCE.getRunning()) {
             return original;
         }
 
+        // Omnidirectional mode: keep original omni logic
+        if (ModuleSprint.INSTANCE.getShouldSprintOmnidirectional()) {
+            float movementForward = input.getMoveVector().y;
+            float movementSideways = input.getMoveVector().x;
+            var hasMovement = Math.abs(movementForward) > 1.0E-5F ||
+                    Math.abs(movementSideways) > 1.0E-5F;
+            var isWalking = (double) Math.abs(movementForward) >= 0.8 ||
+                    (double) Math.abs(movementSideways) >= 0.8;
+            return this.isUnderWater() ? hasMovement : isWalking;
+        }
+
+        // LEGIT mode but module enabled: any movement input counts as walking
+        // so sprint can start in any direction, not just forward.
         float movementForward = input.getMoveVector().y;
         float movementSideways = input.getMoveVector().x;
         var hasMovement = Math.abs(movementForward) > 1.0E-5F ||
                 Math.abs(movementSideways) > 1.0E-5F;
-        var isWalking = (double) Math.abs(movementForward) >= 0.8 ||
-                (double) Math.abs(movementSideways) >= 0.8;
-        return this.isUnderWater() ? hasMovement : isWalking;
+        return this.isUnderWater() ? hasMovement : hasMovement;
     }
 
     @ModifyExpressionValue(method = "sendIsSprintingIfNeeded", at = @At(
