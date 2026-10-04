@@ -26,7 +26,6 @@ import net.ccbluex.liquidbounce.event.EventManager;
 import net.ccbluex.liquidbounce.event.events.PlayerSafeWalkEvent;
 import net.ccbluex.liquidbounce.features.command.commands.ingame.fakeplayer.FakePlayer;
 import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleAutoWeapon;
-import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleKeepSprint;
 import net.ccbluex.liquidbounce.features.module.modules.combat.criticals.modes.CriticalsNoGround;
 import net.ccbluex.liquidbounce.features.module.modules.exploit.ModuleAntiReducedDebugInfo;
 import net.ccbluex.liquidbounce.features.module.modules.movement.ModuleNoClip;
@@ -162,11 +161,9 @@ public abstract class MixinPlayer extends MixinLivingEntity {
 
     @ModifyArgs(method = "causeExtraKnockback", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/phys/Vec3;multiply(DDD)Lnet/minecraft/world/phys/Vec3;"))
     private void hookSlowVelocity(Args args) {
-        if (liquid_bounce$isClientPlayer() && ModuleKeepSprint.INSTANCE.getRunning()) {
-            double motion = ModuleKeepSprint.INSTANCE.getMotion();
-            args.set(0, motion); // x
-            args.set(2, motion); // z
-        }
+        // Pro fork: removed ModuleKeepSprint check. The Sprint module
+        // (Movement category, alias KeepSprint) now handles this via its
+        // own SprintEvent handler. We no longer override motion here.
     }
 
     /**
@@ -174,20 +171,14 @@ public abstract class MixinPlayer extends MixinLivingEntity {
      */
     @WrapWithCondition(method = "causeExtraKnockback", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/player/Player;setSprinting(Z)V", ordinal = 0))
     private boolean hookSlowVelocity(Player instance, boolean b) {
-        if (liquid_bounce$isClientPlayer()) {
-            ModuleKeepSprint.INSTANCE.setSprinting(b);
-            return !ModuleKeepSprint.INSTANCE.getRunning() || b;
-        }
-
+        // Pro fork: removed ModuleKeepSprint check. Sprint module keeps
+        // sprinting alive via SprintEvent. Allow setSprinting normally.
         return true;
     }
 
     @ModifyExpressionValue(method = "attack", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/player/Player;isSprinting()Z"))
     private boolean hookSlowVelocity(boolean original) {
-        if (liquid_bounce$isClientPlayer() && ModuleKeepSprint.INSTANCE.getRunning()) {
-            return ModuleKeepSprint.INSTANCE.getSprinting();
-        }
-
+        // Pro fork: removed ModuleKeepSprint override. Use real isSprinting.
         return original;
     }
 
