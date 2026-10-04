@@ -138,7 +138,7 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
      * fight whole crowds at once. Combined with multiTargetCooldown=0 (below),
      * every enemy in range gets hit every single tick.
      */
-    private val multiTargetMaxPerTick by int("MultiTargetMaxPerTick", 20, 1..50, "targets")
+    private val multiTargetMaxPerTick by int("MultiTargetMaxPerTick", 15, 1..50, "targets")
 
     /**
      * Pro fork: cooldown (in ticks) between attacks on the SAME enemy when multi-target
@@ -148,7 +148,7 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
      * Set higher (e.g. 2) if the server's anti-cheat starts flagging for too many
      * attack packets per second per enemy.
      */
-    private val multiTargetCooldown by int("MultiTargetCooldown", 0, 0..20, "ticks")
+    private val multiTargetCooldown by int("MultiTargetCooldown", 1, 0..20, "ticks")
 
     /**
      * Pro fork: tracks the last tick each enemy was attacked, so we don't spam the same
