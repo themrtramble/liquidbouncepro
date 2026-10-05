@@ -291,6 +291,23 @@ object ConfigSystem {
             valueGroup.range.migrateFromValues(valuesByName)
         }
 
+        // Pro fork: Migration Code for MovementCorrection
+        // Old configs may have MovementCorrection = SILENT which causes
+        // player movement to freeze when KillAura is enabled. Force
+        // reset to OFF (the new safe default) if the saved value is
+        // SILENT or STRICT. This runs once during config load and the
+        // user can then change it in ClickGUI if they really want to.
+        for (valueElem in storedValues) {
+            val valueObj = valueElem.asJsonObject
+            val valueName = valueObj["name"]?.asString ?: continue
+            if (valueName == "MovementCorrection") {
+                val savedValue = valueObj["value"]?.asString
+                if (savedValue == "SILENT" || savedValue == "STRICT" || savedValue == "CHANGE_LOOK") {
+                    valueObj.addProperty("value", "OFF")
+                }
+            }
+        }
+
         for (value in valueGroup.inner) {
             if (!value.isPersistent) continue
 
