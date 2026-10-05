@@ -306,6 +306,15 @@ object ConfigSystem {
                     valueObj.addProperty("value", "OFF")
                 }
             }
+            // Pro fork: Also force reset XRay BackgroundOpacity to 0 (clean XRay view)
+            // Old configs may have BackgroundOpacity = 100 which shows dim background
+            // and makes XRay look like it's not working ("sab normal dikhta hai")
+            if (valueName == "BackgroundOpacity") {
+                val savedValue = valueObj["value"]?.asInt
+                if (savedValue != null && savedValue > 0) {
+                    valueObj.addProperty("value", 0)
+                }
+            }
         }
 
         for (value in valueGroup.inner) {
