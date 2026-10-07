@@ -334,7 +334,33 @@ object ConfigSystem {
                 ?: continue
             if (queue.isEmpty()) continue
 
-            deserializeValue(value, queue.removeFirst())
+            var valueJson = queue.removeFirst()
+
+            // Pro fork: Per-value migration (fires for EVERY value including nested groups)
+            // This is the CORRECT place for migration — not the top-level scan above,
+            // because MovementCorrection lives inside Rotations (nested in KillAura)
+            // and the top-level scan never reaches it.
+            val valueName = valueJson["name"]?.asString ?: ""
+            if (valueName == "MovementCorrection") {
+                val savedValue = valueJson["value"]?.asString
+                if (savedValue == "SILENT" || savedValue == "STRICT" || savedValue == "CHANGE_LOOK") {
+                    valueJson.addProperty("value", "OFF")
+                }
+            }
+            if (valueName == "Criticals") {
+                val savedValue = valueJson["value"]?.asString
+                if (savedValue == "SMART" || savedValue == "ALWAYS") {
+                    valueJson.addProperty("value", "IGNORE")
+                }
+            }
+            if (valueName == "BackgroundOpacity") {
+                val savedValue = valueJson["value"]?.asInt
+                if (savedValue != null && savedValue > 0) {
+                    valueJson.addProperty("value", 0)
+                }
+            }
+
+            deserializeValue(value, valueJson)
         }
     }
 
