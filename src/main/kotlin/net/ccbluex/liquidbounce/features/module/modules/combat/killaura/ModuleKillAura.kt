@@ -136,14 +136,15 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
     private val multiTargetMaxPerTick by int("MultiTargetMaxPerTick", 15, 1..50, "targets")
 
     /**
-     * Pro fork (v3 TURBO): cooldown (in ticks) between attacks on the SAME enemy when multi-target
-     * is enabled. Default 0 = NO cooldown — every enemy in range gets hit every single tick.
+     * Pro fork (v5 ROLLBACK): cooldown (in ticks) between attacks on the SAME enemy
+     * when multi-target is enabled. Default 1 — exactly the freeze-free v2 'light'
+     * build. v3/v4 (0 = hit every enemy every tick) stacked per-enemy attack spam
+     * on top of the zero item cooldown and is part of what brought the freeze back.
      *
-     * Even at 0, the packet rate stays sane because MultiTargetMaxPerTick caps
-     * how many distinct enemies are attacked per tick. Set higher (e.g. 2) only
-     * if a server anti-cheat flags per-enemy attack packet rates.
+     * MultiTarget is OFF by default anyway; 1 keeps per-enemy pacing believable
+     * to anti-cheats. Raise/lower it in the GUI if needed.
      */
-    private val multiTargetCooldown by int("MultiTargetCooldown", 0, 0..20, "ticks")
+    private val multiTargetCooldown by int("MultiTargetCooldown", 1, 0..20, "ticks")
 
     /**
      * Pro fork: tracks the last tick each enemy was attacked, so we don't spam the same

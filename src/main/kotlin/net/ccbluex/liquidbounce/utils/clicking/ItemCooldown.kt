@@ -26,22 +26,21 @@ import net.minecraft.world.entity.player.Player
 open class ItemCooldown : ValueGroup("ItemCooldown", aliases = listOf("Cooldown")) {
 
     /**
-     * Pro fork (v3 TURBO): minimum cooldown 0..0 — NO waiting on the vanilla
-     * attack-strength meter. Every attack fires the instant the clicker wants
-     * it, at full CPS, so enemies can no longer hit-and-run.
+     * Pro fork (v5 ROLLBACK): minimum cooldown 0.85..1.0 — back to the v2
+     * 'light' build's timing that never froze.
      *
-     * The v2 default (0.85..1.0) paced attacks to the weapon cooldown, which
-     * meant only ~1.6 attacks/sec with a sword — that is exactly why enemies
-     * could hit you and walk away before the aura retaliated.
+     * v3/v4 (0..0) removed the vanilla attack-strength wait entirely; that
+     * zero-cooldown spam is exactly when the freeze came back. Waiting for the
+     * attack meter (0.85..1.0) paces attacks so every hit lands at ~85-100%
+     * damage — fewer packets, full damage per hit, and the movement pipeline
+     * stays clean.
      *
-     * Trade-off: on servers WITH vanilla attack-cooldown damage scaling each
-     * hit deals reduced damage — but the attack rate is ~12x higher, which
-     * dominates on 1.8-style PvP servers and always feels responsive.
-     * Raise this in the GUI if you ever want timed full-damage hits back.
+     * Users on 1.8-style servers (no cooldown damage scaling) can still lower
+     * this in the GUI.
      */
     private val minimumCooldown by floatRange(
         "Minimum",
-        0.0f..0.0f, 0.0f..2.0f
+        0.85f..1.0f, 0.0f..2.0f
     )
 
     private var nextCooldown = minimumCooldown.random()

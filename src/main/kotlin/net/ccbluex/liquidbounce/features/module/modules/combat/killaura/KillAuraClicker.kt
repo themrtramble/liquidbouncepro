@@ -50,9 +50,9 @@ object KillAuraClicker : Clicker<ModuleKillAura>(
     ModuleKillAura,
     mc.options.keyAttack,
     KillAuraClickerItemCooldown(),
-    // Pro fork (v4): raise the GUI slider ceiling so users who want raw speed
-    // can push CPS up to 100 without recompiling.
-    maxCps = 100
+    // Pro fork (v5 ROLLBACK): slider ceiling back to 50 — same as the freeze-free
+    // v2 'light' build. The v4 bump to 100 invited extreme settings that froze.
+    maxCps = 50
 ) {
 
     override val isClickTick: Boolean

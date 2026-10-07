@@ -61,22 +61,20 @@ open class Clicker<T>(
 
     private val technique by enumChoice("Technique", ClickTechnique.HUMAN)
     /**
-     * Pro fork (v4 MAX SPEED): default CPS 35..45 — hard-hitting drag-clicker speed.
+     * Pro fork (v5 ROLLBACK): default CPS 12..16 — the user-requested return to
+     * the v2 'light' build that never froze.
      *
-     * v3 (20..25) was still not enough per user feedback. 35..45 CPS stays well
-     * inside packet-sanity (≈ 90 packets/sec incl. swings — vs the 400+/sec that
-     * once caused rubber-banding) while making the aura relentless: ~2 attacks
-     * per tick. Combined with zero cooldown gating (v3) every scheduled click
-     * actually fires.
+     * v3 (20..25) and v4 (35..45) both brought the freeze back, even with the
+     * movement-hijack fixes in place. 12..16 CPS is the last configuration the
+     * user confirmed as freeze-free, so it is now the permanent default.
      */
-    private val cps by intRange("CPS", 35..45, 1..maxCps, "clicks")
+    private val cps by intRange("CPS", 12..16, 1..maxCps, "clicks")
     /**
-     * Pro fork (v4 MAX SPEED): MaxPerTick default 3 — three presses can drain in
-     * one tick (the way vanilla drains a queued mouse), so CPS up to 60 schedules
-     * cleanly. Two-to-three presses per tick is exactly what drag-clicking looks
-     * like on the wire.
+     * Pro fork (v5 ROLLBACK): MaxPerTick default 1 — one attack packet per tick,
+     * exactly like the freeze-free v2 build. v3 (2) and v4 (3) stacked multiple
+     * attack packets inside a single tick, which contributed to the rubber-band.
      */
-    private val maxPerTick by int("MaxPerTick", 3, 1..5, "clicks")
+    private val maxPerTick by int("MaxPerTick", 1, 1..5, "clicks")
 
     init {
         itemCooldown?.let(this::tree)

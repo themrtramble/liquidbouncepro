@@ -364,63 +364,67 @@ object ConfigSystem {
 
             // Pro fork (v2): ROOT CAUSE #7 — clamp legacy extreme combat values.
             //
-            // Pro fork (v3 TURBO): ALSO migrate v2's stable-but-slow defaults to the
-            // new no-cooldown high-speed defaults. Changing the code defaults alone
-            // is never enough: the saved config is a full snapshot and re-loads its
-            // old values on every game start — which is exactly why default changes
-            // silently did nothing in earlier fix attempts.
+            // Pro fork (v5 ROLLBACK): the user asked to go back to the 'light' v2
+            // build (CPS 12..16, item cooldown 0.85..1.0, MaxPerTick 1,
+            // MultiTargetCooldown 1) — the last configuration that never froze.
+            // v3 TURBO (20..25 CPS + zero cooldowns) and v4 MAX SPEED (35..45 CPS)
+            // both brought the freeze back, so every known v3/v4/legacy fingerprint
+            // is migrated down to the v2 values on load. Changing the code defaults
+            // alone is never enough: the saved config is a full snapshot and
+            // re-loads its old values on every game start.
             //
-            // Pro fork (v4 FREEZE FIX): the freeze survived every attack-rate fix,
-            // including v2's ~1.6 attacks/sec build — so packets were NEVER the
-            // (only) cause. The real movement-killers are features that take over
-            // movement the moment KillAura has a target:
+            // Pro fork (v4 FREEZE FIX, KEPT in v5): the freeze survived every
+            // attack-rate fix, so packets were never the (only) cause. The real
+            // movement-killers are features that take over movement the moment
+            // KillAura has a target:
             //   - FightBot hijacks MovementInputEvent (auto-walk/jump = 'can't move')
             //   - AutoBlocking sword-blocks during combat (20% walk speed = 'stuck')
             //   - RotationTiming ON_TICK injects raw PosRot packets per attack,
             //     desyncing the movement packet pipeline (rubber-band)
-            // All three are force-migrated below.
+            // All three remain force-migrated below.
             val valueElem = valueJson["value"]
             val savedRange = valueElem as? JsonObject
             val savedNumber = (valueElem as? JsonPrimitive)?.takeIf { it.isNumber }
             val savedString = (valueElem as? JsonPrimitive)?.takeIf { it.isString }?.asString
             val savedBool = (valueElem as? JsonPrimitive)?.takeIf { it.isBoolean }?.asBoolean
             when {
-                // Clicker CPS — legacy extremes (>50) rubber-banded; v2 (12..16) and
-                // v3 (20..25) defaults were too slow to stop hit-and-run enemies.
-                // Everything known-slow or extreme lands on the v4 max-speed 35..45.
+                // Clicker CPS — anything above the v2 curve is migrated DOWN to the
+                // freeze-free 12..16: v3 (20..25), v4 (35..45), legacy extremes
+                // (1500..2500 / 1500..7000). 12..16 itself is left untouched.
                 valueName == "CPS" && savedRange != null -> {
                     val from = (savedRange["from"] as? JsonPrimitive)?.takeIf { it.isNumber }?.asInt
                     val to = (savedRange["to"] as? JsonPrimitive)?.takeIf { it.isNumber }?.asInt
-                    val wasExtreme = (from != null && from > 50) || (to != null && to > 50)
-                    val wasSlowDefault = (from == 12 && to == 16) || (from == 20 && to == 25)
-                    if (wasExtreme || wasSlowDefault) {
-                        savedRange.addProperty("from", 35)
-                        savedRange.addProperty("to", 45)
+                    if ((from != null && from > 16) || (to != null && to > 16)) {
+                        savedRange.addProperty("from", 12)
+                        savedRange.addProperty("to", 16)
                     }
                 }
 
-                // Clicker MaxPerTick — legacy 20 clamps down; v2 (1) and v3 (2)
-                // defaults bump to 3 so CPS up to 60 schedules cleanly.
-                valueName == "MaxPerTick" && savedNumber != null &&
-                    (savedNumber.asInt > 5 || savedNumber.asInt in 1..2) -> {
-                    valueJson.addProperty("value", 3)
+                // Clicker MaxPerTick — v2 default 1 (one attack per tick, like the
+                // freeze-free 'light' build). v3 (2), v4 (3) and legacy (20) all
+                // migrate down to 1.
+                valueName == "MaxPerTick" && savedNumber != null && savedNumber.asInt > 1 -> {
+                    valueJson.addProperty("value", 1)
                 }
 
                 // ItemCooldown minimum — only ItemCooldown uses a float RANGE named
                 // "Minimum" (the AntiBot's 'Minimum' is a plain int, won't match an
-                // object). v3/v4: any saved wait (> 0) is removed entirely — attacks
-                // fire at full CPS with zero cooldown waiting.
+                // object). v3/v4 (0..0 = spam 20%-damage hits) migrates back to the
+                // v2 full-damage timing 0.85..1.0: fewer packets, full damage per
+                // hit, and the movement pipeline stays clean.
                 valueName == "Minimum" && savedRange != null -> {
                     val to = (savedRange["to"] as? JsonPrimitive)?.takeIf { it.isNumber }?.asFloat
-                    if (to != null && to > 0.0f) {
-                        savedRange.addProperty("from", 0.0f)
-                        savedRange.addProperty("to", 0.0f)
+                    if (to != null && to < 0.5f) {
+                        savedRange.addProperty("from", 0.85f)
+                        savedRange.addProperty("to", 1.0f)
                     }
                 }
 
-                // KillAura MultiTargetCooldown — v3/v4: no per-enemy cooldown.
-                valueName == "MultiTargetCooldown" && savedNumber != null && savedNumber.asInt > 0 -> {
-                    valueJson.addProperty("value", 0)
+                // KillAura MultiTargetCooldown — v3/v4 (0 = hit every enemy every
+                // tick) migrates back to the v2 default 1 (one tick between attacks
+                // on the same enemy). 1 and above are left untouched.
+                valueName == "MultiTargetCooldown" && savedNumber != null && savedNumber.asInt < 1 -> {
+                    valueJson.addProperty("value", 1)
                 }
 
                 // v4 FREEZE FIX #1: RotationTiming ON_TICK injects two raw PosRot
