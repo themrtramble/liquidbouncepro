@@ -306,6 +306,15 @@ object ConfigSystem {
                     valueObj.addProperty("value", "OFF")
                 }
             }
+            // Pro fork: Also force reset KillAura Criticals to IGNORE (was SMART)
+            // SMART mode pauses attacks when player is jumping (waits for crit),
+            // which causes the 'stuck' feeling during PvP combat.
+            if (valueName == "Criticals") {
+                val savedValue = valueObj["value"]?.asString
+                if (savedValue == "SMART" || savedValue == "ALWAYS") {
+                    valueObj.addProperty("value", "IGNORE")
+                }
+            }
             // Pro fork: Also force reset XRay BackgroundOpacity to 0 (clean XRay view)
             // Old configs may have BackgroundOpacity = 100 which shows dim background
             // and makes XRay look like it's not working ("sab normal dikhta hai")
