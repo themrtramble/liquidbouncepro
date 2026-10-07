@@ -88,11 +88,21 @@ object ModuleSprint : ClientModule("Sprint", ModuleCategories.MOVEMENT, aliases 
             return@handler
         }
 
-        // Pro fork: ALWAYS sprint when moving, regardless of source.
-        // Removed the MOVEMENT_TICK/INPUT source check so sprint is forced
-        // on every SprintEvent (movement tick, input, network) - this
-        // matches the user's 'kahin bhi chale to KeepSprint kare' request.
-        event.sprint = true
+        // Pro fork (v2): force sprint on the CLIENT-side movement sources only
+        // (MOVEMENT_TICK and INPUT). This keeps the 'KeepSprint' feel — you
+        // always sprint while moving in any direction — WITHOUT touching the
+        // NETWORK source.
+        //
+        // Forcing sprint on NETWORK too (the old v1 behavior) fought with other
+        // combat modules (KillAura crit sprint-gating, Criticals, Scaffold,
+        // InventoryMove) which deliberately hold back the server-side sprint
+        // flag. Two modules flipping the same flag every tick made the server
+        // see sprint toggling dozens of times per second — rubber-banding and
+        // a jerky, 'stuck' movement feel. Client-side sources keep full speed;
+        // server-side state stays consistent.
+        if (event.source == SprintEvent.Source.MOVEMENT_TICK || event.source == SprintEvent.Source.INPUT) {
+            event.sprint = true
+        }
     }
 
     @Suppress("unused")

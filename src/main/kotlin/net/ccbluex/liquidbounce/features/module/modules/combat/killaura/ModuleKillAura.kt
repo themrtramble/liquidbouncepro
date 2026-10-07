@@ -70,7 +70,6 @@ import net.ccbluex.liquidbounce.utils.math.sq
 import net.ccbluex.liquidbounce.utils.raytracing.findEntityInCrosshair
 import net.ccbluex.liquidbounce.utils.raytracing.isLookingAtEntity
 import net.ccbluex.liquidbounce.utils.render.TargetRenderer
-import net.ccbluex.liquidbounce.utils.client.network
 import net.ccbluex.liquidbounce.utils.client.player
 import net.ccbluex.liquidbounce.utils.client.world
 import net.minecraft.client.gui.screens.inventory.ContainerScreen
@@ -326,7 +325,7 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
                 .sortedBy { player.squaredBoxedDistanceTo(it) }
                 .take(multiTargetMaxPerTick - 1)
 
-            for ((index, extra) in candidates.withIndex()) {
+            for (extra in candidates) {
                 if (CombatManager.shouldPauseCombat) break
 
                 // Pro fork: also check canAttackNow for extras so we don't waste
@@ -334,30 +333,18 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
                 // critical hit is not yet possible. Matches primary target behavior.
                 if (!canAttackNow(extra, player.mainHandItem)) continue
 
-                // SIMPLE rotation — no raytrace overhead (findRotation is expensive)
-                // Just look at the enemy's eye position directly
-                val extraRot = Rotation.lookingAt(
-                    extra.position().add(0.0, extra.getEyeHeight(extra.pose).toDouble(), 0.0),
-                    player.eyePosition
-                ).normalize()
-
-                // Pro fork: only send rotation packet for the FIRST extra enemy in the
-                // tick. Sending PosRot for every extra enemy (15 per tick) caused the
-                // server to override the player's rotation 15 times per tick, which
-                // made the player's movement jittery ('jhaat-jhaat lagti' feedback).
-                // Now we set the player's rotation ONCE per tick for the first extra,
-                // and the remaining extras just attack without re-sending rotation -
-                // the server already thinks we're aiming at the first extra's direction,
-                // and since the extras are all nearby, the hit-test still passes.
-                if (index == 0) {
-                    network.send(
-                        net.minecraft.network.protocol.game.ServerboundMovePlayerPacket.PosRot(
-                            player.x, player.y, player.z,
-                            extraRot.yaw, extraRot.pitch,
-                            player.onGround(), player.horizontalCollision
-                        )
-                    )
-                }
+                // Pro fork (v2): NO raw PosRot packet sends anymore.
+                //
+                // The old code sent a raw ServerboundMovePlayerPacket.PosRot directly
+                // into the connection, bypassing the movement packet pipeline. That
+                // desynced RotationManager's actualServerRotation tracking and fought
+                // with the regular outgoing movement packets, causing visible view
+                // jitter and rubber-banding. Multi-target extras now attack through
+                // the normal attack path; the RotationManager's spoofed rotation
+                // (managed by the primary target) is what the server sees.
+                //
+                // Extras are all within melee range of each other, so the server-side
+                // hit check still passes for most of them.
 
                 // Direct attack — bypasses clicker scheduler entirely
                 attackEntity(extra, SwingMode.DO_NOT_HIDE, keepSprint && !shouldBlockSprinting)

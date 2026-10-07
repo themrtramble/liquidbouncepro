@@ -50,7 +50,7 @@ open class Clicker<T>(
     val parent: T,
     val keyBinding: KeyMapping,
     val itemCooldown: ItemCooldown? = ItemCooldown(),
-    maxCps: Int = 10000,
+    maxCps: Int = 50,
     name: String = "Clicker",
     simulateAttackKeyDown: Boolean = false,
 ) : ValueGroup(name, aliases = listOf("ClickScheduler")), EventListener where T : EventListener {
@@ -61,18 +61,24 @@ open class Clicker<T>(
 
     private val technique by enumChoice("Technique", ClickTechnique.HUMAN)
     /**
-     * Pro fork: default CPS 1500..2500 (ULTRA-fast but stable). maxCps cap = 10000.
-     * Higher CPS (5000+) causes client-side tick instability and packet flood.
-     * 1500..2500 is the sweet spot: extremely fast but won't destabilize the
-     * client or saturate the network. Anti-ban via Criticals SMART (legit
-     * crit pattern) + MultiTargetCooldown 1 tick (believable per-enemy rate).
+     * Pro fork (v2): default CPS 12..16 — the REAL stuck fix.
+     *
+     * The previous extreme values (1500..2500, up to 7000) caused 400+ attack
+     * packets per second, which overloaded the server and caused rubber-banding
+     * (the 'stuck / can't move' feeling). 12..16 CPS is fast PvP speed while
+     * staying completely stable: no tick overload, no packet flood, no lagback.
+     *
+     * Note: with the attack-strength cooldown enforced (see ItemCooldown),
+     * attacks are paced to the weapon anyway — timed full-damage hits kill
+     * FASTER than spamming 20%-damage hits, with far fewer packets.
      */
-    private val cps by intRange("CPS", 1500..2500, 1..maxCps, "clicks")
+    private val cps by intRange("CPS", 12..16, 1..maxCps, "clicks")
     /**
-     * Pro fork: MaxPerTick default 20 = max 20 attacks per tick per enemy.
-     * Combined with CPS 800..2000, this enables extremely fast attack rates.
+     * Pro fork (v2): MaxPerTick default 1 — more than one attack per tick on the
+     * same target is wasted (damage resets per hit) and looks bot-like to
+     * anti-cheats. One perfectly-timed hit per tick is the fastest real kill speed.
      */
-    private val maxPerTick by int("MaxPerTick", 20, 1..50, "clicks")
+    private val maxPerTick by int("MaxPerTick", 1, 1..5, "clicks")
 
     init {
         itemCooldown?.let(this::tree)

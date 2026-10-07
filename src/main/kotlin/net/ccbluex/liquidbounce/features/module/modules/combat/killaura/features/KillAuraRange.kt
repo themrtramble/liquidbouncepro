@@ -31,18 +31,23 @@ import kotlin.math.max
 /**
  * Allows adjusting your attack range and scan range.
  *
- * Pro fork: defaults buffed — full +12 max range (was +10), 12 through walls, larger scan range.
- * Range limit raised to 12 blocks per user request.
+ * Pro fork (v2): sane defaults — 1.5 block reach increase (≈ 4.5 block total range,
+ * the classic "reach" advantage) and 0.5 through-walls range.
+ *
+ * The previous 12-block increase (15-block total range!) made KillAura lock onto
+ * players far outside melee range, constantly ray-tracing and swinging at air —
+ * which felt broken and instantly flags anti-cheats. The slider still goes up
+ * to 12 for users who want it, but the default is now competitive-safe.
  */
-object KillAuraRange : RangeValueGroup("Range", 12f, 12f), MinecraftShortcuts {
+object KillAuraRange : RangeValueGroup("Range", 1.5f, 0.5f), MinecraftShortcuts {
 
     internal val scanRange
         get() = maxOf(interactionRange, interactionThroughWallsRange) + currentScanRangeAddition
 
     private var scanRangeIncrease by floatRange(
         "ScanRangeIncrease",
-        5.0f..8.0f,
-        0.0f..15.0f,
+        1.0f..2.0f,
+        0.0f..7.0f,
         "blocks"
     ).onChanged { range ->
         currentScanRangeAddition = range.random()

@@ -21,6 +21,7 @@ package net.ccbluex.liquidbounce.config
 import com.google.gson.Gson
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
+import com.google.gson.JsonPrimitive
 import net.ccbluex.liquidbounce.LiquidBounce
 import net.ccbluex.liquidbounce.config.gson.fileGson
 import net.ccbluex.liquidbounce.config.gson.util.parseTree
@@ -357,6 +358,66 @@ object ConfigSystem {
                 val savedValue = valueJson["value"]?.asInt
                 if (savedValue != null && savedValue > 0) {
                     valueJson.addProperty("value", 0)
+                }
+            }
+
+            // Pro fork (v2): ROOT CAUSE #7 — clamp legacy extreme combat values.
+            //
+            // Earlier builds shipped insane defaults (CPS 1500..7000, MaxPerTick 20,
+            // +12 block attack range, item cooldown 0). Changing the code defaults
+            // was never enough: the user's saved config re-loaded those extreme values
+            // on every game start — which is exactly why KillAura kept freezing
+            // movement after six previous 'root cause' fixes. These one-time clamps
+            // bring any legacy config onto the stable settings.
+            val valueElem = valueJson["value"]
+            val savedRange = valueElem as? JsonObject
+            val savedNumber = (valueElem as? JsonPrimitive)?.takeIf { it.isNumber }
+            when {
+                // Clicker CPS — 400+ packets/sec caused the server-side rubber-band
+                valueName == "CPS" && savedRange != null -> {
+                    val from = (savedRange["from"] as? JsonPrimitive)?.takeIf { it.isNumber }?.asInt
+                    val to = (savedRange["to"] as? JsonPrimitive)?.takeIf { it.isNumber }?.asInt
+                    if ((from != null && from > 50) || (to != null && to > 50)) {
+                        savedRange.addProperty("from", 12)
+                        savedRange.addProperty("to", 16)
+                    }
+                }
+
+                // Clicker MaxPerTick — more than one attack per tick is wasted damage
+                valueName == "MaxPerTick" && savedNumber != null && savedNumber.asInt > 5 -> {
+                    valueJson.addProperty("value", 1)
+                }
+
+                // ItemCooldown minimum — only ItemCooldown uses a float RANGE named
+                // "Minimum" (the AntiBot's 'Minimum' is a plain int, won't match an
+                // object). 0..0 meant every hit dealt 20% damage: 5x the packets for
+                // the same damage. Reset to full-damage timing.
+                valueName == "Minimum" && savedRange != null -> {
+                    val to = (savedRange["to"] as? JsonPrimitive)?.takeIf { it.isNumber }?.asFloat
+                    if (to != null && to < 0.5f) {
+                        savedRange.addProperty("from", 0.85f)
+                        savedRange.addProperty("to", 1.0f)
+                    }
+                }
+
+                // KillAura range values — gated on the 'Range' group so the Reach
+                // module's 'Entity' group (same value names) is left untouched.
+                valueGroup.name == "Range" && savedNumber != null && valueName in
+                    listOf("RangeIncrease", "ThroughWallsRange") -> {
+                    if (savedNumber.asFloat > 3.0f) {
+                        valueJson.addProperty(
+                            "value",
+                            if (valueName == "RangeIncrease") 1.5f else 0.5f
+                        )
+                    }
+                }
+
+                valueName == "ScanRangeIncrease" && valueGroup.name == "Range" && savedRange != null -> {
+                    val from = (savedRange["from"] as? JsonPrimitive)?.takeIf { it.isNumber }?.asFloat
+                    if (from != null && from > 3.0f) {
+                        savedRange.addProperty("from", 1.0f)
+                        savedRange.addProperty("to", 2.0f)
+                    }
                 }
             }
 
