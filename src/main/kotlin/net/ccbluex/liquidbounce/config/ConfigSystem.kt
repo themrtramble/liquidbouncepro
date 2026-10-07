@@ -19,6 +19,7 @@
 package net.ccbluex.liquidbounce.config
 
 import com.google.gson.Gson
+import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonPrimitive
@@ -368,36 +369,47 @@ object ConfigSystem {
             // is never enough: the saved config is a full snapshot and re-loads its
             // old values on every game start — which is exactly why default changes
             // silently did nothing in earlier fix attempts.
+            //
+            // Pro fork (v4 FREEZE FIX): the freeze survived every attack-rate fix,
+            // including v2's ~1.6 attacks/sec build — so packets were NEVER the
+            // (only) cause. The real movement-killers are features that take over
+            // movement the moment KillAura has a target:
+            //   - FightBot hijacks MovementInputEvent (auto-walk/jump = 'can't move')
+            //   - AutoBlocking sword-blocks during combat (20% walk speed = 'stuck')
+            //   - RotationTiming ON_TICK injects raw PosRot packets per attack,
+            //     desyncing the movement packet pipeline (rubber-band)
+            // All three are force-migrated below.
             val valueElem = valueJson["value"]
             val savedRange = valueElem as? JsonObject
             val savedNumber = (valueElem as? JsonPrimitive)?.takeIf { it.isNumber }
+            val savedString = (valueElem as? JsonPrimitive)?.takeIf { it.isString }?.asString
+            val savedBool = (valueElem as? JsonPrimitive)?.takeIf { it.isBoolean }?.asBoolean
             when {
-                // Clicker CPS — legacy extremes (>50) caused the 400+ packets/sec
-                // rubber-band; the v2 default (12..16) was too slow to retaliate
-                // against hit-and-run enemies. Both now migrate to the fast 20..25.
+                // Clicker CPS — legacy extremes (>50) rubber-banded; v2 (12..16) and
+                // v3 (20..25) defaults were too slow to stop hit-and-run enemies.
+                // Everything known-slow or extreme lands on the v4 max-speed 35..45.
                 valueName == "CPS" && savedRange != null -> {
                     val from = (savedRange["from"] as? JsonPrimitive)?.takeIf { it.isNumber }?.asInt
                     val to = (savedRange["to"] as? JsonPrimitive)?.takeIf { it.isNumber }?.asInt
                     val wasExtreme = (from != null && from > 50) || (to != null && to > 50)
-                    val wasSlowV2Default = from == 12 && to == 16
-                    if (wasExtreme || wasSlowV2Default) {
-                        savedRange.addProperty("from", 20)
-                        savedRange.addProperty("to", 25)
+                    val wasSlowDefault = (from == 12 && to == 16) || (from == 20 && to == 25)
+                    if (wasExtreme || wasSlowDefault) {
+                        savedRange.addProperty("from", 35)
+                        savedRange.addProperty("to", 45)
                     }
                 }
 
-                // Clicker MaxPerTick — legacy 20 clamps down; the v2 default 1 bumps
-                // up to 2 so CPS above 20 can actually schedule (two presses per tick).
+                // Clicker MaxPerTick — legacy 20 clamps down; v2 (1) and v3 (2)
+                // defaults bump to 3 so CPS up to 60 schedules cleanly.
                 valueName == "MaxPerTick" && savedNumber != null &&
-                    (savedNumber.asInt > 5 || savedNumber.asInt == 1) -> {
-                    valueJson.addProperty("value", 2)
+                    (savedNumber.asInt > 5 || savedNumber.asInt in 1..2) -> {
+                    valueJson.addProperty("value", 3)
                 }
 
                 // ItemCooldown minimum — only ItemCooldown uses a float RANGE named
                 // "Minimum" (the AntiBot's 'Minimum' is a plain int, won't match an
-                // object). v3 TURBO: any saved wait (> 0, e.g. the v2 default 0.85..1.0
-                // that paced attacks to ~1.6/sec with a sword) is removed entirely —
-                // attacks now fire at full CPS with zero cooldown waiting.
+                // object). v3/v4: any saved wait (> 0) is removed entirely — attacks
+                // fire at full CPS with zero cooldown waiting.
                 valueName == "Minimum" && savedRange != null -> {
                     val to = (savedRange["to"] as? JsonPrimitive)?.takeIf { it.isNumber }?.asFloat
                     if (to != null && to > 0.0f) {
@@ -406,11 +418,52 @@ object ConfigSystem {
                     }
                 }
 
-                // KillAura MultiTargetCooldown — the v2 default (1 tick) throttled
-                // per-enemy attacks in multi-target mode; v3 TURBO removes the
-                // per-enemy cooldown entirely (0 = hit every enemy every tick).
+                // KillAura MultiTargetCooldown — v3/v4: no per-enemy cooldown.
                 valueName == "MultiTargetCooldown" && savedNumber != null && savedNumber.asInt > 0 -> {
                     valueJson.addProperty("value", 0)
+                }
+
+                // v4 FREEZE FIX #1: RotationTiming ON_TICK injects two raw PosRot
+                // packets per attack (rotate-to-target + rotate-back) that bypass
+                // the movement packet pipeline. At high CPS this desyncs the
+                // server-side position/rotation state = rubber-banding. SNAP does
+                // the same job through the legit RotationManager pipeline.
+                valueName == "RotationTiming" && savedString == "ON_TICK" -> {
+                    valueJson.addProperty("value", "SNAP")
+                }
+
+                // v4 FREEZE FIX #2: FightBot & AutoBlocking take over movement the
+                // moment KillAura has a target (auto-walk/jump input hijack and
+                // 20%-speed sword-blocking). If a legacy config has either enabled,
+                // force it off — they are the 'stuck, can't move' feel that survived
+                // every attack-rate fix. They can be re-enabled in the ClickGUI.
+                valueName == "FightBot" || valueName == "AutoBlocking" -> {
+                    (valueJson["value"] as? JsonArray)?.forEach { element ->
+                        val innerValue = element as? JsonObject ?: return@forEach
+                        if (innerValue["name"]?.asString == "Enabled" &&
+                            (innerValue["value"] as? JsonPrimitive)?.takeIf { it.isBoolean }?.asBoolean == true) {
+                            innerValue.addProperty("value", false)
+                        }
+                    }
+                }
+
+                // v4 SPEED: AutoBlock reblock/pause ticks — any saved pause (> 0)
+                // stalls attacks after unblocking. Migrated to 0..0 so blocking
+                // (if re-enabled manually) never pauses the aura.
+                valueGroup.name == "AutoBlocking" && savedRange != null && valueName in
+                    listOf("Reblock", "TickOn", "PauseOnUnblock", "TickOff") -> {
+                    val to = (savedRange["to"] as? JsonPrimitive)?.takeIf { it.isNumber }?.asInt
+                    if (to != null && to > 0) {
+                        savedRange.addProperty("from", 0)
+                        savedRange.addProperty("to", 0)
+                    }
+                }
+
+                // v4 SPEED: MissCooldown — dropping clicks after a missed hit only
+                // slows the aura down. Force off (alias 'AttackCooldown' in old
+                // configs is handled by the alias-aware queue lookup above).
+                valueName == "MissCooldown" && savedBool == true -> {
+                    valueJson.addProperty("value", false)
                 }
 
                 // KillAura range values — gated on the 'Range' group so the Reach

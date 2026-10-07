@@ -61,25 +61,22 @@ open class Clicker<T>(
 
     private val technique by enumChoice("Technique", ClickTechnique.HUMAN)
     /**
-     * Pro fork (v3 TURBO): default CPS 20..25 — roughly one attack per tick.
+     * Pro fork (v4 MAX SPEED): default CPS 35..45 — hard-hitting drag-clicker speed.
      *
-     * v2 (12..16) felt sluggish in PvP: enemies hit you and escaped before the
-     * aura retaliated. 20..25 CPS is the fastest rate that stays completely
-     * stable — no tick overload, no packet flood, no rubber-band (the old
-     * freeze came from 1500..2500 CPS = 400+ attack packets/sec, which is
-     * 10-20x above this setting even at its worst).
-     *
-     * Combined with ItemCooldown 0..0 (v3), every scheduled click actually
-     * fires — no waiting on the attack-strength meter.
+     * v3 (20..25) was still not enough per user feedback. 35..45 CPS stays well
+     * inside packet-sanity (≈ 90 packets/sec incl. swings — vs the 400+/sec that
+     * once caused rubber-banding) while making the aura relentless: ~2 attacks
+     * per tick. Combined with zero cooldown gating (v3) every scheduled click
+     * actually fires.
      */
-    private val cps by intRange("CPS", 20..25, 1..maxCps, "clicks")
+    private val cps by intRange("CPS", 35..45, 1..maxCps, "clicks")
     /**
-     * Pro fork (v3 TURBO): MaxPerTick default 2 — lets the scheduler batch two
-     * attacks into one tick so CPS above 20 actually schedules. Packet-wise
-     * this stays far below flood territory; anti-cheat-wise two presses per
-     * tick is exactly what a vanilla mouse-drained click queue looks like.
+     * Pro fork (v4 MAX SPEED): MaxPerTick default 3 — three presses can drain in
+     * one tick (the way vanilla drains a queued mouse), so CPS up to 60 schedules
+     * cleanly. Two-to-three presses per tick is exactly what drag-clicking looks
+     * like on the wire.
      */
-    private val maxPerTick by int("MaxPerTick", 2, 1..5, "clicks")
+    private val maxPerTick by int("MaxPerTick", 3, 1..5, "clicks")
 
     init {
         itemCooldown?.let(this::tree)

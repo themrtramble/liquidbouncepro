@@ -49,7 +49,10 @@ import kotlin.math.round
 object KillAuraClicker : Clicker<ModuleKillAura>(
     ModuleKillAura,
     mc.options.keyAttack,
-    KillAuraClickerItemCooldown()
+    KillAuraClickerItemCooldown(),
+    // Pro fork (v4): raise the GUI slider ceiling so users who want raw speed
+    // can push CPS up to 100 without recompiling.
+    maxCps = 100
 ) {
 
     override val isClickTick: Boolean
