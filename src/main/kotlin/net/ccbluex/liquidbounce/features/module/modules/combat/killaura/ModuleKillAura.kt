@@ -136,14 +136,14 @@ object ModuleKillAura : ClientModule("KillAura", ModuleCategories.COMBAT) {
     private val multiTargetMaxPerTick by int("MultiTargetMaxPerTick", 15, 1..50, "targets")
 
     /**
-     * Pro fork: cooldown (in ticks) between attacks on the SAME enemy when multi-target
-     * is enabled. Default 0 = attack every tick. With CPS 200..500 and MaxPerTick 10,
-     * this produces the fastest possible multi-target attack rate.
+     * Pro fork (v3 TURBO): cooldown (in ticks) between attacks on the SAME enemy when multi-target
+     * is enabled. Default 0 = NO cooldown — every enemy in range gets hit every single tick.
      *
-     * Set higher (e.g. 2) if the server's anti-cheat starts flagging for too many
-     * attack packets per second per enemy.
+     * Even at 0, the packet rate stays sane because MultiTargetMaxPerTick caps
+     * how many distinct enemies are attacked per tick. Set higher (e.g. 2) only
+     * if a server anti-cheat flags per-enemy attack packet rates.
      */
-    private val multiTargetCooldown by int("MultiTargetCooldown", 1, 0..20, "ticks")
+    private val multiTargetCooldown by int("MultiTargetCooldown", 0, 0..20, "ticks")
 
     /**
      * Pro fork: tracks the last tick each enemy was attacked, so we don't spam the same

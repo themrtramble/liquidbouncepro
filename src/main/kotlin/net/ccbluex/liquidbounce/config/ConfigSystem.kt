@@ -363,41 +363,54 @@ object ConfigSystem {
 
             // Pro fork (v2): ROOT CAUSE #7 — clamp legacy extreme combat values.
             //
-            // Earlier builds shipped insane defaults (CPS 1500..7000, MaxPerTick 20,
-            // +12 block attack range, item cooldown 0). Changing the code defaults
-            // was never enough: the user's saved config re-loaded those extreme values
-            // on every game start — which is exactly why KillAura kept freezing
-            // movement after six previous 'root cause' fixes. These one-time clamps
-            // bring any legacy config onto the stable settings.
+            // Pro fork (v3 TURBO): ALSO migrate v2's stable-but-slow defaults to the
+            // new no-cooldown high-speed defaults. Changing the code defaults alone
+            // is never enough: the saved config is a full snapshot and re-loads its
+            // old values on every game start — which is exactly why default changes
+            // silently did nothing in earlier fix attempts.
             val valueElem = valueJson["value"]
             val savedRange = valueElem as? JsonObject
             val savedNumber = (valueElem as? JsonPrimitive)?.takeIf { it.isNumber }
             when {
-                // Clicker CPS — 400+ packets/sec caused the server-side rubber-band
+                // Clicker CPS — legacy extremes (>50) caused the 400+ packets/sec
+                // rubber-band; the v2 default (12..16) was too slow to retaliate
+                // against hit-and-run enemies. Both now migrate to the fast 20..25.
                 valueName == "CPS" && savedRange != null -> {
                     val from = (savedRange["from"] as? JsonPrimitive)?.takeIf { it.isNumber }?.asInt
                     val to = (savedRange["to"] as? JsonPrimitive)?.takeIf { it.isNumber }?.asInt
-                    if ((from != null && from > 50) || (to != null && to > 50)) {
-                        savedRange.addProperty("from", 12)
-                        savedRange.addProperty("to", 16)
+                    val wasExtreme = (from != null && from > 50) || (to != null && to > 50)
+                    val wasSlowV2Default = from == 12 && to == 16
+                    if (wasExtreme || wasSlowV2Default) {
+                        savedRange.addProperty("from", 20)
+                        savedRange.addProperty("to", 25)
                     }
                 }
 
-                // Clicker MaxPerTick — more than one attack per tick is wasted damage
-                valueName == "MaxPerTick" && savedNumber != null && savedNumber.asInt > 5 -> {
-                    valueJson.addProperty("value", 1)
+                // Clicker MaxPerTick — legacy 20 clamps down; the v2 default 1 bumps
+                // up to 2 so CPS above 20 can actually schedule (two presses per tick).
+                valueName == "MaxPerTick" && savedNumber != null &&
+                    (savedNumber.asInt > 5 || savedNumber.asInt == 1) -> {
+                    valueJson.addProperty("value", 2)
                 }
 
                 // ItemCooldown minimum — only ItemCooldown uses a float RANGE named
                 // "Minimum" (the AntiBot's 'Minimum' is a plain int, won't match an
-                // object). 0..0 meant every hit dealt 20% damage: 5x the packets for
-                // the same damage. Reset to full-damage timing.
+                // object). v3 TURBO: any saved wait (> 0, e.g. the v2 default 0.85..1.0
+                // that paced attacks to ~1.6/sec with a sword) is removed entirely —
+                // attacks now fire at full CPS with zero cooldown waiting.
                 valueName == "Minimum" && savedRange != null -> {
                     val to = (savedRange["to"] as? JsonPrimitive)?.takeIf { it.isNumber }?.asFloat
-                    if (to != null && to < 0.5f) {
-                        savedRange.addProperty("from", 0.85f)
-                        savedRange.addProperty("to", 1.0f)
+                    if (to != null && to > 0.0f) {
+                        savedRange.addProperty("from", 0.0f)
+                        savedRange.addProperty("to", 0.0f)
                     }
+                }
+
+                // KillAura MultiTargetCooldown — the v2 default (1 tick) throttled
+                // per-enemy attacks in multi-target mode; v3 TURBO removes the
+                // per-enemy cooldown entirely (0 = hit every enemy every tick).
+                valueName == "MultiTargetCooldown" && savedNumber != null && savedNumber.asInt > 0 -> {
+                    valueJson.addProperty("value", 0)
                 }
 
                 // KillAura range values — gated on the 'Range' group so the Reach

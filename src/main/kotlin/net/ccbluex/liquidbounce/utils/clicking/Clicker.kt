@@ -61,24 +61,25 @@ open class Clicker<T>(
 
     private val technique by enumChoice("Technique", ClickTechnique.HUMAN)
     /**
-     * Pro fork (v2): default CPS 12..16 — the REAL stuck fix.
+     * Pro fork (v3 TURBO): default CPS 20..25 — roughly one attack per tick.
      *
-     * The previous extreme values (1500..2500, up to 7000) caused 400+ attack
-     * packets per second, which overloaded the server and caused rubber-banding
-     * (the 'stuck / can't move' feeling). 12..16 CPS is fast PvP speed while
-     * staying completely stable: no tick overload, no packet flood, no lagback.
+     * v2 (12..16) felt sluggish in PvP: enemies hit you and escaped before the
+     * aura retaliated. 20..25 CPS is the fastest rate that stays completely
+     * stable — no tick overload, no packet flood, no rubber-band (the old
+     * freeze came from 1500..2500 CPS = 400+ attack packets/sec, which is
+     * 10-20x above this setting even at its worst).
      *
-     * Note: with the attack-strength cooldown enforced (see ItemCooldown),
-     * attacks are paced to the weapon anyway — timed full-damage hits kill
-     * FASTER than spamming 20%-damage hits, with far fewer packets.
+     * Combined with ItemCooldown 0..0 (v3), every scheduled click actually
+     * fires — no waiting on the attack-strength meter.
      */
-    private val cps by intRange("CPS", 12..16, 1..maxCps, "clicks")
+    private val cps by intRange("CPS", 20..25, 1..maxCps, "clicks")
     /**
-     * Pro fork (v2): MaxPerTick default 1 — more than one attack per tick on the
-     * same target is wasted (damage resets per hit) and looks bot-like to
-     * anti-cheats. One perfectly-timed hit per tick is the fastest real kill speed.
+     * Pro fork (v3 TURBO): MaxPerTick default 2 — lets the scheduler batch two
+     * attacks into one tick so CPS above 20 actually schedules. Packet-wise
+     * this stays far below flood territory; anti-cheat-wise two presses per
+     * tick is exactly what a vanilla mouse-drained click queue looks like.
      */
-    private val maxPerTick by int("MaxPerTick", 1, 1..5, "clicks")
+    private val maxPerTick by int("MaxPerTick", 2, 1..5, "clicks")
 
     init {
         itemCooldown?.let(this::tree)
@@ -88,7 +89,8 @@ open class Clicker<T>(
      * When missing a hit, Minecraft has a cooldown before you can attack again.
      * This option will consider the cooldown before attacking again.
      *
-     * Pro fork: default OFF — ignore the miss-cooldown so swings keep firing.
+     * Pro fork: default OFF — ignore the miss-cooldown so swings keep firing
+     * at full speed. (v3 TURBO: all cooldown gating is OFF by default.)
      *
      * This is useful for anti-cheats that detect if you are ignoring this cooldown.
      * Applies to the FailSwing feature as well.

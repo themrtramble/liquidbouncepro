@@ -26,22 +26,22 @@ import net.minecraft.world.entity.player.Player
 open class ItemCooldown : ValueGroup("ItemCooldown", aliases = listOf("Cooldown")) {
 
     /**
-     * Pro fork (v2): minimum cooldown 0.85..1.0 — attacks wait for ~85-100% of
-     * the vanilla attack-strength meter before firing.
+     * Pro fork (v3 TURBO): minimum cooldown 0..0 — NO waiting on the vanilla
+     * attack-strength meter. Every attack fires the instant the clicker wants
+     * it, at full CPS, so enemies can no longer hit-and-run.
      *
-     * WHY this is FASTER than the old 0.0 setting: attack damage scales with the
-     * cooldown meter (0.2 + progress² * 0.8). Spamming at 0 progress means every
-     * hit deals only 20% damage — you need 5x the hits for the same damage,
-     * flooding the server with packets (which caused the stuck/rubber-band feel).
-     * Timed hits at ~85-100% deal near-full damage each, kill faster overall,
-     * restore knockback and enable sweep attacks — with a fraction of the packets.
+     * The v2 default (0.85..1.0) paced attacks to the weapon cooldown, which
+     * meant only ~1.6 attacks/sec with a sword — that is exactly why enemies
+     * could hit you and walk away before the aura retaliated.
      *
-     * Users who want raw spam (e.g. 1.8-style servers without cooldown) can
-     * still lower this in the GUI.
+     * Trade-off: on servers WITH vanilla attack-cooldown damage scaling each
+     * hit deals reduced damage — but the attack rate is ~12x higher, which
+     * dominates on 1.8-style PvP servers and always feels responsive.
+     * Raise this in the GUI if you ever want timed full-damage hits back.
      */
     private val minimumCooldown by floatRange(
         "Minimum",
-        0.85f..1.0f, 0.0f..2.0f
+        0.0f..0.0f, 0.0f..2.0f
     )
 
     private var nextCooldown = minimumCooldown.random()
